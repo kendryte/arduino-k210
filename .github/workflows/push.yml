@@ -1,0 +1,57 @@
+name: arduino-k210 core build and autotest, based on ESP32 Arduino CI
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths-ignore:
+      - '.github/workflows/docs.yml'
+      - 'docs/**'
+
+  pull_request:
+    branches:
+      - 'main'
+    paths-ignore:
+      - '.github/workflows/docs.yml'
+      - 'docs/**'
+
+concurrency:
+  group: build-${{github.event.pull_request.number || github.ref}}
+  cancel-in-progress: true
+
+jobs:
+
+  build-arduino:
+    name: Arduino Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    - name: Build Sketches
+      run: |
+        bash ./tools/on-push.sh
+
+  test-arduino-linux:
+    name: Arduino Test on ubuntu-20.04
+    runs-on: self-hosted
+    needs: build-arduino
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build testcases
+      run: |
+        bash ./tools/tests_build.sh -c -b canaan_k1 -i 0 -m 1
+    - name: Run testcases
+      run: |
+        bash ./tools/tests_run_simple.sh
+    - uses: actions/upload-artifact@v3
+      with:
+        name: "arduino-test-report-${{ github.sha }}"
+        path: ${{ github.workspace }}/tests/report/**

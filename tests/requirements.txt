@@ -1,0 +1,8 @@
+pyserial>=3.0
+#kflash
+pytest-cov
+
+pytest>=6.2.0
+pexpect>=4.4
+dataclasses
+pytest-html

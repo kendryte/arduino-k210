@@ -1,0 +1,19 @@
+scons: Reading SConscript files ...
+Newlib version: 4.1.0
+Applications
+Compiler
+CPlusPlus
+CPU
+DeviceDrivers
+Drivers
+K210-SDK
+Kernel
+POSIX
+scons: done reading SConscript files.
+scons: Building targets ...
+scons: building associated VariantDir targets: build
+riscv-none-embed-ar -rc libDeviceDrivers_gcc.a build/kernel/components/drivers/ipc/completion.o build/kernel/components/drivers/ipc/dataqueue.o build/kernel/components/drivers/ipc/pipe.o build/kernel/components/drivers/ipc/ringblk_buf.o build/kernel/components/drivers/ipc/ringbuffer.o build/kernel/components/drivers/ipc/waitqueue.o build/kernel/components/drivers/ipc/workqueue.o build/kernel/components/drivers/rtc/rtc.o build/kernel/components/drivers/serial/serial.o
+ranlib libDeviceDrivers_gcc.a
+Install compiled library... DeviceDrivers_gcc
+Copy libDeviceDrivers_gcc.a => /home/xel/work/Arduino/rt-thread/components/drivers/serial/libDeviceDrivers_gcc.a
+scons: done building targets.

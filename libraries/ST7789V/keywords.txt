@@ -1,0 +1,29 @@
+#######################################
+# Syntax Coloring Map LCD
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+ST7789V	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin   KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+DIR_XY_RLUD LITERAL1
+DIR_YX_RLUD LITERAL1
+DIR_XY_LRUD LITERAL1
+DIR_YX_LRUD LITERAL1
+DIR_XY_RLDU LITERAL1
+DIR_YX_RLDU LITERAL1
+DIR_XY_LRDU LITERAL1
+DIR_YX_LRDU LITERAL1
+DIR_XY_MASK LITERAL1
+DIR_RL_MASK LITERAL1
+DIR_UD_MASK LITERAL1

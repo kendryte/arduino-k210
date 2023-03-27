@@ -1,0 +1,64 @@
+name: arduino-k210 documents build and deploy
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Requirements.
+      run: pip3 install sphinx==5.3.0 sphinx_multiversion sphinx_rtd_theme sphinx-copybutton
+
+    - name: Build
+      run: |
+        git fetch --unshallow # fetch all history
+        cd docs && make mhtml
+        find build -type d -name ".doctrees" | xargs rm -rf
+        find build -type f -name ".buildinfo" | xargs rm -rf
+        find build -type f -name "objects.inv" | xargs rm -rf
+        cd -
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v1
+      with:
+        path: 'docs/build'
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: build
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}/main
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1

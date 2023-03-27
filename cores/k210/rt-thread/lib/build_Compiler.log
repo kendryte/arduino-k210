@@ -1,0 +1,19 @@
+scons: Reading SConscript files ...
+Newlib version: 4.1.0
+Applications
+Compiler
+CPlusPlus
+CPU
+DeviceDrivers
+Drivers
+K210-SDK
+Kernel
+POSIX
+scons: done reading SConscript files.
+scons: Building targets ...
+scons: building associated VariantDir targets: build
+riscv-none-embed-ar -rc libCompiler_gcc.a build/kernel/components/libc/compilers/common/cctype.o build/kernel/components/libc/compilers/common/cstdio.o build/kernel/components/libc/compilers/common/cstdlib.o build/kernel/components/libc/compilers/common/cstring.o build/kernel/components/libc/compilers/common/ctime.o build/kernel/components/libc/compilers/common/cwchar.o build/kernel/components/libc/compilers/newlib/syscalls.o
+ranlib libCompiler_gcc.a
+Install compiled library... Compiler_gcc
+Copy libCompiler_gcc.a => /home/xel/work/Arduino/rt-thread/components/libc/compilers/newlib/libCompiler_gcc.a
+scons: done building targets.

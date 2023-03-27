@@ -1,0 +1,36 @@
+#######################################
+# Syntax Coloring Map SPI
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+SPI	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+end	KEYWORD2
+transfer	KEYWORD2
+setBitOrder	KEYWORD2
+setDataMode	KEYWORD2
+setUseSoftCS	KEYWORD2
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+SPI_MODE0	    LITERAL1
+SPI_MODE1	    LITERAL1
+SPI_MODE2	    LITERAL1
+SPI_MODE3	    LITERAL1
+SPI_LSBFIRST    LITERAL1
+SPI_MSBFIRST    LITERAL1
+SPI_BUS_0       LITERAL1
+SPI_BUS_1       LITERAL1
+#SPI_BUS_2       LITERAL1
+#SPI_BUS_3       LITERAL1
+SPI_BUS_SOFT    LITERAL1
+SPI_BUS_MAX     LITERAL1

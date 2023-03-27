@@ -1,0 +1,10 @@
+package/package_k210_index.json
+.vscode
+build
+__pycache__
+.pytest_cache
+test.log
+*.pyc
+tests/report
+tools/kflash_py
+tools/xpack-riscv-none-embed-gcc

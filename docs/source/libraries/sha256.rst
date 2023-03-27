@@ -1,0 +1,158 @@
+#########
+SHA256
+#########
+
+`K210` 有一个硬件 `SHA256` 计算模块
+
+begin
+^^^^^^
+
+描述
+======
+
+设置要计算的数据总长度
+
+语法
+======
+
+.. code-block:: arduino
+
+    static void begin(size_t dataLen);
+
+参数
+======
+
+* ``dataLen`` 数据总长度
+
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    SHA256::begin(30);
+
+end
+^^^^^
+
+描述
+======
+
+关闭 `SHA256` 模块
+
+语法
+======
+
+.. code-block:: arduino
+
+    static void end();
+
+参数
+======
+
+无
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    SHA256::end();
+
+
+update
+^^^^^^^^^^^
+
+描述
+======
+
+计算指定长度的数据
+
+语法
+======
+
+.. code-block:: arduino
+
+    static void update(const void *input, size_t len);
+
+参数
+======
+
+* ``input`` 输入的数据
+
+* ``len`` 数据长度
+
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    uint8_t data[] = "012345678901234567890123456789";
+    SHA256::update(data, 30);
+
+digest
+^^^^^^^^^^^
+
+描述
+======
+
+获取计算过数据的 `SHA256` 校验值
+
+语法
+======
+
+.. code-block:: arduino
+
+    static void digest(uint8_t *sha256);
+
+参数
+======
+
+* ``sha256`` 获取校验值，长度 `32` 字节
+
+
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    uint8_t sha256[32];
+    SHA256::digest(sha256);
+
+例程 - sha256_test.ino
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**SHA256计算测试**
+
+以下是一个SHA256哈希函数测试程序，它通过计算输入数据的SHA256哈希值来验证SHA256库的正确性。
+
+在该程序中，我们首先声明了一个存储哈希结果的数组和一个包含测试数据的数组，并使用Serial.begin()函数初始化串口通信。\
+然后，我们调用SHA256::begin()函数初始化哈希计算器、SHA256::update()函数将测试数据添加到计算器中、SHA256::digest()函数计算哈希值以及SHA256::end()函数结束哈希计算。最后，我们使用Serial.printf()函数将哈希结果输出到串行端口。
+
+需要注意的是，SHA256哈希函数是一种加密安全算法，因此在实际应用中需要采取相应的保护措施，比如将敏感信息进行加密处理，避免泄露。另外，在使用SHA256库时，需要根据具体情况确定输入数据长度并进行相应的填充操作。
+
+.. literalinclude:: ../../../libraries/K210_SHA256/examples/sha256_test/sha256_test.ino
+    :language: arduino
+

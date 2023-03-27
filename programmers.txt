@@ -1,0 +1,8 @@
+kflash_py.name=kflash_py
+kflash_py.communication=serial
+kflash_py.protocol=serial
+kflash_py.extra_params=
+kflash_py.program.protocol=serial
+kflash_py.program.tool=kflash_py
+kflash_py.program.tool.default=kflash_py
+kflash_py.program.extra_params=

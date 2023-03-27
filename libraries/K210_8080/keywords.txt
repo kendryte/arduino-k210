@@ -1,0 +1,26 @@
+#######################################
+# Syntax Coloring Map LCD
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Bus8080	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+reset   KEYWORD2
+
+writeCommand KEYWORD2
+writeCommand KEYWORD2
+writeData KEYWORD2
+writeData KEYWORD2
+writeData KEYWORD2
+fillData KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################

@@ -1,0 +1,108 @@
+menu.clk_freq=CPU Clock Frequency
+menu.burn_baudrate=Burn Serial Buadrate
+menu.enable_console=Enable Rt-Thread Console
+menu.stack_size=Rt-Thread Main Thread Stack Size
+menu.enable_only_kmodel_v3=Only Support KMODEL V3
+
+##############################################################
+###                      Boards Start                      ###
+##############################################################
+
+k1.name=Canaan K1
+
+k1.upload.tool=kflash_py
+k1.upload.tool.default=kflash_py
+
+k1.upload.maximum_size=6291456
+k1.upload.maximum_data_size=6291456
+k1.upload.flags=
+k1.upload.extra_flags=
+
+k1.serial.disableDTR=true
+k1.serial.disableRTS=true
+
+k1.build.core=k210
+k1.build.variant=canaan_k1
+k1.build.board=CANAAN_K1
+k1.build.burn_board=dan
+
+k1.menu.clk_freq.400=400MHz
+k1.menu.clk_freq.500=500MHz
+k1.menu.clk_freq.600=600MHz
+k1.menu.clk_freq.400.build.f_cpu=400000000UL
+k1.menu.clk_freq.500.build.f_cpu=500000000UL
+k1.menu.clk_freq.600.build.f_cpu=600000000UL
+
+k1.menu.burn_baudrate.1000000=1 Mbps
+k1.menu.burn_baudrate.1500000=1.5 Mbps
+k1.menu.burn_baudrate.2000000=2 Mbps
+k1.menu.burn_baudrate.1000000.build.burn_baudrate=1000000
+k1.menu.burn_baudrate.1500000.build.burn_baudrate=1500000
+k1.menu.burn_baudrate.2000000.build.burn_baudrate=2000000
+
+k1.menu.enable_console.disable=Disable
+k1.menu.enable_console.disable.build.enable_console=0
+k1.menu.enable_console.enable=Enable
+k1.menu.enable_console.enable.build.enable_console=1
+
+k1.menu.stack_size.256K=256K
+k1.menu.stack_size.128K=128K
+k1.menu.stack_size.64K=64K
+k1.menu.stack_size.256K.build.main_stack_size=262144
+k1.menu.stack_size.128K.build.main_stack_size=131072
+k1.menu.stack_size.64K.build.main_stack_size=65536
+
+k1.menu.enable_only_kmodel_v3.disable=Disable
+k1.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
+k1.menu.enable_only_kmodel_v3.enable=Enable
+k1.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1
+###############################################################
+
+01studio_k210.name=01Studio K210
+
+01studio_k210.upload.tool=kflash_py
+01studio_k210.upload.tool.default=kflash_py
+
+01studio_k210.upload.maximum_size=6291456
+01studio_k210.upload.maximum_data_size=6291456
+01studio_k210.upload.flags=
+01studio_k210.upload.extra_flags=
+
+01studio_k210.serial.disableDTR=true
+01studio_k210.serial.disableRTS=true
+
+01studio_k210.build.core=k210
+01studio_k210.build.variant=01studio_k210
+01studio_k210.build.board=01studio_k210
+01studio_k210.build.burn_board=dan
+
+01studio_k210.menu.clk_freq.400=400MHz
+01studio_k210.menu.clk_freq.500=500MHz
+01studio_k210.menu.clk_freq.600=600MHz
+01studio_k210.menu.clk_freq.400.build.f_cpu=400000000UL
+01studio_k210.menu.clk_freq.500.build.f_cpu=500000000UL
+01studio_k210.menu.clk_freq.600.build.f_cpu=600000000UL
+
+01studio_k210.menu.burn_baudrate.1000000=1 Mbps
+01studio_k210.menu.burn_baudrate.1500000=1.5 Mbps
+01studio_k210.menu.burn_baudrate.2000000=2 Mbps
+01studio_k210.menu.burn_baudrate.1000000.build.burn_baudrate=1000000
+01studio_k210.menu.burn_baudrate.1500000.build.burn_baudrate=1500000
+01studio_k210.menu.burn_baudrate.2000000.build.burn_baudrate=2000000
+
+01studio_k210.menu.enable_console.disable=Disable
+01studio_k210.menu.enable_console.disable.build.enable_console=0
+01studio_k210.menu.enable_console.enable=Enable
+01studio_k210.menu.enable_console.enable.build.enable_console=1
+
+01studio_k210.menu.stack_size.256K=256K
+01studio_k210.menu.stack_size.128K=128K
+01studio_k210.menu.stack_size.64K=64K
+01studio_k210.menu.stack_size.256K.build.main_stack_size=262144
+01studio_k210.menu.stack_size.128K.build.main_stack_size=131072
+01studio_k210.menu.stack_size.64K.build.main_stack_size=65536
+
+01studio_k210.menu.enable_only_kmodel_v3.disable=Disable
+01studio_k210.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
+01studio_k210.menu.enable_only_kmodel_v3.enable=Enable
+01studio_k210.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1

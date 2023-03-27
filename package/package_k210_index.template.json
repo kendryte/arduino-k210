@@ -1,0 +1,129 @@
+{
+    "packages": [
+        {
+            "name": "Kendryte",
+            "maintainer": "Canaan Creative",
+            "websiteURL": "https://github.com/kendryte/arduino-k210",
+            "email": "kendryte747@canaan-creative.com",
+            "help": {
+                "online": "https://developer.canaan-creative.com/index.html?channel=developer#/home/0"
+            },
+            "platforms": [
+                {
+                    "name": "K210",
+                    "architecture": "K210",
+                    "category": "Contributed",
+                    "version": "0.1.0",
+                    "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/k210-0.1.0.zip",
+                    "archiveFileName": "arduino-k210.zip",
+                    "checksum": "",
+                    "size": "",
+                    "help": {
+                        "online": ""
+                    },
+                    "boards": [
+                        {
+                            "name": "Canaan K1"
+                        }
+                    ],
+                    "toolsDependencies": [
+                        {
+                            "packager": "Kendryte",
+                            "name": "xpack-riscv-none-embed-gcc",
+                            "version": "10.2.0-1.2"
+                        },
+                        {
+                            "packager": "Kendryte",
+                            "name": "kflash_py",
+                            "version": "1.1.6"
+                        }
+                    ]
+                }
+            ],
+            "tools": [
+                {
+                    "name": "xpack-riscv-none-embed-gcc",
+                    "version": "10.2.0-1.2",
+                    "systems": [
+                        {
+                            "host": "i686-mingw32",
+                            "archiveFileName": "xpack-riscv-none-embed-gcc-10.2.0-1.2-win32-ia32.zip",
+                            "url": "https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v10.2.0-1.2/xpack-riscv-none-embed-gcc-10.2.0-1.2-win32-ia32.zip",
+                            "checksum": "SHA-256:f9d25d057d69e3d460fd15f422b533ae315e6ecdcd389bbd784cc2e083ba64b3",
+                            "size": "564334418"
+                        },
+                        {
+                            "host": "x86_64-mingw32",
+                            "url": "https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v10.2.0-1.2/xpack-riscv-none-embed-gcc-10.2.0-1.2-win32-x64.zip",
+                            "archiveFileName": "xpack-riscv-none-embed-gcc-10.2.0-1.2-win32-x64.zip",
+                            "checksum": "SHA-256:2ec9f651dc349da0672edf6d26542e85c7c8068c8eab11b88b99b0edbd2260fc",
+                            "size": "576824252"
+                        },
+                        {
+                            "host": "i686-linux-gnu",
+                            "archiveFileName": "xpack-riscv-none-embed-gcc-10.2.0-1.2-linux-ia32.tar.gz",
+                            "url": "https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v10.2.0-1.2/xpack-riscv-none-embed-gcc-10.2.0-1.2-linux-ia32.tar.gz",
+                            "checksum": "SHA-256:2e3f947403404359c8996a8b8c50dc61e8ee0f720da561d354f74b57f2fd4d53",
+                            "size": "576794387"
+                        },
+                        {
+                            "host": "x86_64-linux-gnu",
+                            "archiveFileName": "xpack-riscv-none-embed-gcc-10.2.0-1.2-linux-x64.tar.gz",
+                            "url": "https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v10.2.0-1.2/xpack-riscv-none-embed-gcc-10.2.0-1.2-linux-x64.tar.gz",
+                            "checksum": "SHA-256:d72bdcd1eee41dc5a208a8a03976b70d014510deb5890c9e8738e804ba23f985",
+                            "size": "572296735"
+                        },
+                        {
+                            "host": "x86_64-apple-darwin",
+                            "archiveFileName": "xpack-riscv-none-embed-gcc-10.2.0-1.2-darwin-x64.tar.gz",
+                            "url": "https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v10.2.0-1.2/xpack-riscv-none-embed-gcc-10.2.0-1.2-darwin-x64.tar.gz",
+                            "checksum": "SHA-256:62637b65ba5f57b88ee32ebf329164cbd9b2fa1d4531915950f707499a7efa2a",
+                            "size": "565850429"
+                        }
+                    ]
+                },
+                {
+                    "name": "kflash_py",
+                    "version": "1.1.6",
+                    "systems": [
+                        {
+                            "host": "i686-mingw32",
+                            "archiveFileName": "kflash-1.1.6-windows.zip",
+                            "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/kflash-1.1.6-windows.zip",
+                            "checksum": "SHA-256:eff32f328dd9fc8024b9a132cd33141af297a25a867a867b872954fd7f772715",
+                            "size": "5949134"
+                        },
+                        {
+                            "host": "x86_64-mingw32",
+                            "archiveFileName": "kflash-1.1.6-windows.zip",
+                            "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/kflash-1.1.6-windows.zip",
+                            "checksum": "SHA-256:eff32f328dd9fc8024b9a132cd33141af297a25a867a867b872954fd7f772715",
+                            "size": "5949134"
+                        },
+                        {
+                            "host": "i686-linux-gnu",
+                            "archiveFileName": "kflash-1.1.6-linux.zip",
+                            "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/kflash-1.1.6-linux.zip",
+                            "checksum": "SHA-256:cc27a24a69120aa172a3d9b6b1c28f3b0b76a5e5a22ac2e704d048cc794008ed",
+                            "size": "779211"
+                        },
+                        {
+                            "host": "x86_64-linux-gnu",
+                            "archiveFileName": "kflash-1.1.6-linux.zip",
+                            "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/kflash-1.1.6-linux.zip",
+                            "checksum": "SHA-256:cc27a24a69120aa172a3d9b6b1c28f3b0b76a5e5a22ac2e704d048cc794008ed",
+                            "size": "779211"
+                        },
+                        {
+                            "host": "x86_64-apple-darwin",
+                            "archiveFileName": "kflash-1.1.6-linux.zip",
+                            "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/kflash-1.1.6-linux.zip",
+                            "checksum": "SHA-256:cc27a24a69120aa172a3d9b6b1c28f3b0b76a5e5a22ac2e704d048cc794008ed",
+                            "size": "779211"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "name": "framework-arduino-k210",
+  "version": "0.9.91",
+    "description": "Arduino Wiring-based Framework for K210",
+    "url": "https://github.com/kendryte/arduino-k210",
+    "keywords": [
+      "framework",
+      "arduino",
+      "kendryte",
+      "k210"
+    ]
+  }
+  

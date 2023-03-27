@@ -1,0 +1,130 @@
+name=K210 Arduino
+version=0.9.91
+
+# Compilers
+tools.xpack-riscv-none-embed-gcc.path={runtime.platform.path}/tools/xpack-riscv-none-embed-gcc
+compiler.path={tools.xpack-riscv-none-embed-gcc.path}/bin/
+compiler.prefix=riscv-none-embed-
+
+compiler.c.cmd={compiler.prefix}gcc
+compiler.cpp.cmd={compiler.prefix}g++
+compiler.S.cmd={compiler.prefix}gcc
+compiler.c.elf.cmd={compiler.prefix}g++
+compiler.ar.cmd={compiler.prefix}ar
+compiler.size.cmd={compiler.prefix}size
+compiler.objcopy.cmd={compiler.prefix}objcopy
+
+# Compile Flags
+compiler.cores.path={runtime.platform.path}/cores/k210
+compiler.sdk.path={compiler.cores.path}/k210-sdk
+compiler.rtt.path={compiler.cores.path}/rt-thread
+compiler.include.path={compiler.cores.path}/rt-thread/include
+
+compiler.includes.flags="-I." "-I{compiler.cores.path}" "-I{compiler.cores.path}/k210-hal" "-I{compiler.sdk.path}/bsp" "-I{compiler.sdk.path}/drivers"  "-I{compiler.sdk.path}/nncase/include" "-I{compiler.sdk.path}/third_party/xtl/include" "-I{compiler.cores.path}/components/include" "-I{compiler.rtt.path}/lib" "-I{compiler.include.path}" "-I{compiler.include.path}/bsp" "-I{compiler.include.path}/kernel" "-I{compiler.include.path}/libc/common" "-I{compiler.include.path}/libc/cplusplus" "-I{compiler.include.path}/libc/newlib" "-I{compiler.include.path}/libc/posix" "-I{compiler.include.path}/DeviceDrivers" "-I{compiler.include.path}/CPU" 
+compiler.build.flags=-DARDUINO={runtime.ide.version} -DARDUINO_{build.board} -DARDUINO_ARCH_{build.arch} -DARDUINO_BOARD="{build.board}" -DARDUINO_VARIANT="{build.variant}" -DF_CPU={build.f_cpu} -DENABLE_CONSOLE={build.enable_console} -DMAIN_STACK_SIZE={build.main_stack_size} -DONLY_KMODEL_V3={build.only_kmodel_v3} -DNNCASE_TARGET=k210 -DKENDRYTE_K210
+compiler.lib.flags=-D__riscv64 -D__RTTHREAD__ -DRT_USING_LIBC -DRT_USING_NEWLIBC -D_POSIX_C_SOURCE=1 -Diomem_free=free -Diomem_malloc=malloc
+compiler.c_cpp.flags={compiler.lib.flags} {compiler.build.flags} -mcmodel=medany -mabi=lp64f -march=rv64imafc -fno-common -ffunction-sections -fdata-sections -fstrict-volatile-bitfields -fno-zero-initialized-in-bss -ffast-math -fno-math-errno -fsingle-precision-constant -Os -ggdb -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-but-set-variable -Wno-error=unused-variable -Wno-error=deprecated-declarations -Wno-multichar -Wextra -Werror=frame-larger-than=32768 -Wno-unused-parameter -Wno-sign-compare -Wno-error=missing-braces -Wno-error=return-type -Wno-error=pointer-sign -Wno-missing-braces -Wno-strict-aliasing -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-int-to-pointer-cast -Wno-error=comment -Wno-error=logical-not-parentheses -Wno-error=duplicate-decl-specifier -Wno-error=parentheses
+
+compiler.c.flags=-c {compiler.includes.flags} {compiler.c_cpp.flags} -std=gnu11 -Wno-pointer-to-int-cast -Wno-old-style-declaration
+compiler.cpp.flags=-c {compiler.includes.flags} {compiler.c_cpp.flags} -std=gnu++17
+compiler.S.flags=-c {compiler.includes.flags} {compiler.c_cpp.flags} -x assembler-with-cpp
+compiler.ar.flags=cr
+#compiler.c.elf.flags={compiler.c_cpp.flags} -nostartfiles -Wl,--gc-sections,-Map={build.path}/{build.project_name}.map,-cref,-u,_start -T {compiler.rtt.path}/lds/link.ld
+compiler.c.elf.flags=-T {compiler.rtt.path}/lds/link.ld -mcmodel=medany -march=rv64imafc -mabi=lp64f -fsingle-precision-constant -nostartfiles -static -Wl,--gc-sections -u vfs_include_syscalls_impl
+
+compiler.c.elf.libs=
+
+# Arduino Compile Warning Levels
+compiler.warning_flags=-w
+compiler.warning_flags.none=-w
+compiler.warning_flags.default=
+compiler.warning_flags.more=-Wall -Werror=all
+compiler.warning_flags.all=-Wall -Werror=all -Wextra
+
+# These can be overridden in platform.local.txt
+compiler.c.extra_flags=
+compiler.cpp.extra_flags=
+compiler.S.extra_flags=
+compiler.ar.extra_flags=
+
+compiler.c.elf.extra_flags=
+compiler.libraries.ldflags=
+
+# This can be overriden in boards.txt
+build.f_cpu=
+build.burn_baudrate=
+
+## Compile c files
+recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} {compiler.c.extra_flags} {includes} "{source_file}" -o "{object_file}"
+
+## Compile c++ files
+recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" {compiler.cpp.flags} {compiler.cpp.extra_flags} {includes} "{source_file}" -o "{object_file}"
+
+## Compile S files
+recipe.S.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.S.flags} {compiler.S.extra_flags} {includes} "{source_file}" -o "{object_file}"
+
+## Create archives
+recipe.ar.pattern="{compiler.path}{compiler.ar.cmd}" {compiler.ar.flags} {compiler.ar.extra_flags} "{archive_file_path}" "{object_file}"
+
+## Combine gc-sections, archives, and objects
+recipe.c.combine.pattern="{compiler.path}{compiler.c.elf.cmd}" "-Wl,--Map={build.path}/{build.project_name}.map" "-L{compiler.rtt.path}/lib" {compiler.c.elf.flags} {compiler.c.elf.extra_flags} -Wl,--start-group {object_files} "{archive_file_path}" -lKernel_gcc -lCPU_gcc -lCPlusPlus_gcc -lDeviceDrivers_gcc -lCompiler_gcc -lm -lgcc -lc -Wl,--end-group -Wl,-EL -o {build.path}/{build.project_name}.elf
+
+## Create bin
+recipe.objcopy.bin.pattern_args=--output-format=binary "{build.path}/{build.project_name}.elf" "{build.path}/{build.project_name}.bin"
+recipe.objcopy.bin.pattern="{compiler.path}{compiler.objcopy.cmd}" {recipe.objcopy.bin.pattern_args}
+
+## Save bin
+recipe.output.tmp_file={build.project_name}.bin
+recipe.output.save_file={build.project_name}.{build.variant}.bin
+
+## Compute size
+recipe.size.pattern="{compiler.path}{compiler.size.cmd}" -B "{build.path}/{build.project_name}.elf"
+recipe.size.regex=\s*[0-9]+\s+[0-9]+\s+[0-9]+\s+([0-9]+).*
+recipe.size.regex.data=\s*[0-9]+\s+[0-9]+\s+[0-9]+\s+([0-9]+).*
+
+## ------------------
+## Upload/Debug tools
+## ------------------
+
+## ------
+## KFlash
+## ------
+
+tools.kflash_py.path={runtime.platform.path}/tools/kflash_py
+tools.kflash_py.cmd=kflash.py
+tools.kflash_py.cmd.windows=kflash.exe
+
+## ------------------------------------------------------------------------------------
+## `upload` a sketch to the target board (using a bootloader preinstalled on the board)
+## ------------------------------------------------------------------------------------
+tools.kflash_py.upload.protocol=serial
+tools.kflash_py.upload.params.verbose=
+tools.kflash_py.upload.params.quiet=
+tools.kflash_py.upload.pattern_args=-n -p {serial.port} -b {build.burn_baudrate} -B {build.burn_board} {build.path}/{build.project_name}.bin
+tools.kflash_py.upload.pattern=python3 "{path}/{cmd}" {upload.pattern_args}
+tools.kflash_py.upload.pattern.windows="{path}/{cmd}" {upload.pattern_args}
+
+## -------------------------------------------------------------------
+## `program` a sketch to the target board using an external programmer
+## -------------------------------------------------------------------
+tools.kflash_py.program.params.verbose=
+tools.kflash_py.program.params.quiet=
+tools.kflash_py.program.pattern_args=
+tools.kflash_py.program.pattern=
+
+## --------------------------------------------------------------------
+## `erase` the target board's flash memory using an external programmer
+## --------------------------------------------------------------------
+tools.kflash_py.erase.protocol=serial
+tools.kflash_py.erase.params.verbose=
+tools.kflash_py.erase.params.quiet=
+tools.kflash_py.erase.pattern_args=
+tools.kflash_py.erase.pattern=
+
+## ----------------------------------------------------------------------
+## burn a `bootloader` into the target board using an external programmer
+## ----------------------------------------------------------------------
+tools.kflash_py.bootloader.protocol=serial
+tools.kflash_py.bootloader.params.verbose=
+tools.kflash_py.bootloader.params.quiet=
+tools.kflash_py.bootloader.pattern=
