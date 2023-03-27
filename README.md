@@ -9,3 +9,7 @@ Use stable release core [package_k210_index.json](https://raw.githubusercontent.
 # Documentation
 
 You can read arduino-k210 online documentation on [github pages](https://kendryte.github.io/arduino-k210/main/)
+
+# New board adaptation
+
+If you want to adapt your board, refer to here [variants/board_config.md](variants/board_config.md)
