@@ -12,4 +12,4 @@ You can read arduino-k210 online documentation on [github pages](https://kendryt
 
 # New board adaptation
 
-If you want to adapt your board, refer to here [variants/board_config.md](variants/board_config.md)
+If you want to adapt your board, refer to here [variants/README.md](variants/README.md)
