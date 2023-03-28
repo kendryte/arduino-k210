@@ -39,6 +39,7 @@ jobs:
         bash ./tools/on-push.sh
 
   test-arduino-linux:
+    if: endsWith(github.ref, 'main')
     name: Arduino Test on ubuntu-20.04
     runs-on: self-hosted
     needs: build-arduino
