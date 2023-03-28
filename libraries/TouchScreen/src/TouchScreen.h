@@ -28,7 +28,6 @@ public:
     virtual int ts_read(int cmd, int *val);
     virtual int ts_write(int cmd, int *val);
 
-    virtual int ts_set_calibration(enum ts_ioctl_type cmd, int cal[7]);
     virtual int do_tscal(ST7789V &lcd, int result[7]);
 
     virtual int _poll() = 0;
@@ -37,4 +36,7 @@ protected:
     TwoWire *_wire;
     uint16_t _dev_addr;
     struct ts_pdata_t ts_pdata;
+
+private:
+    virtual int ts_set_calibration(enum ts_ioctl_type cmd, int cal[7]);
 };
