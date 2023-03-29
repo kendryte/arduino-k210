@@ -1,0 +1,302 @@
+##############
+Touch Screen
+##############
+
+
+TouchScreen
+#############
+
+构造函数
+^^^^^^^^^
+
+描述
+======
+
+构造函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    TouchScreen(TwoWire *wire, uint16_t dev_addr);
+
+参数
+======
+
+* ``wire`` See :doc:`wire`
+
+* ``dev_addr`` 触摸设备 `I2C` 设备地址
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+无
+
+poll
+^^^^^^^^^
+
+描述
+======
+
+读取触摸数据
+
+语法
+======
+
+.. code-block:: arduino
+
+    TSPoint poll();
+
+参数
+======
+
+无
+
+返回值
+========
+
+* ``TSPoint`` See `TSPoint`_
+
+示例说明
+============
+
+无
+
+ts_read
+^^^^^^^^^
+
+描述
+======
+
+使用 `I2C` 读寄存器，可在派生类中重写该函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    virtual int ts_read(int cmd, int *val);
+
+参数
+======
+
+* ``cmd`` 寄存器地址
+
+* ``val`` 读取到的结果
+
+返回值
+========
+
+* ``sts`` 执行状态
+
+    * ``0`` 成功
+
+    * ``Other`` 失败
+
+示例说明
+============
+
+无
+
+ts_write
+^^^^^^^^^
+
+描述
+======
+
+使用 `I2C` 写寄存器，可在派生类中重写该函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    virtual int ts_write(int cmd, int *val);
+
+参数
+======
+
+* ``cmd`` 寄存器地址
+
+* ``val`` 写入寄存器的数据
+
+返回值
+========
+
+* ``sts`` 执行状态
+
+    * ``0`` 成功
+
+    * ``Other`` 失败
+
+示例说明
+============
+
+无
+
+do_tscal
+^^^^^^^^^
+
+描述
+======
+
+触摸屏校准，可在派生类中重写该函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    virtual int do_tscal(ST7789V &lcd, int result[7]);
+
+参数
+======
+
+* ``lcd`` 屏幕，用来显示校准点, See :doc:`lcd`
+
+* ``result`` 校准结果
+
+返回值
+========
+
+* ``sts`` 执行状态
+
+    * ``0`` 成功
+
+    * ``Other`` 失败
+
+示例说明
+============
+
+无
+
+--------------
+
+TSPoint
+###########
+
+构造函数
+^^^^^^^^^
+
+描述
+======
+
+构造函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    TSPoint(int x0, int y0, enum event_type type0);
+
+参数
+======
+
+* ``x0`` 触摸坐标 `x` 轴坐标
+
+* ``y0`` 触摸坐标 `y` 轴坐标
+
+* ``type0`` 触摸结果类型
+
+    - ``TOUCH_NONE`` 默认
+    - ``TOUCH_BEGIN`` 按下
+    - ``TOUCH_MOVE`` 按下之后移动
+    - ``TOUCH_END`` 停止触摸
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+无
+
+--------------
+
+NS2009
+###########
+
+构造函数
+^^^^^^^^^
+
+描述
+======
+
+构造函数
+
+语法
+======
+
+.. code-block:: arduino
+
+    NS2009(TwoWire *wire);
+
+参数
+======
+
+* ``wire`` See :doc:`wire`
+
+返回值
+========
+
+无
+
+示例说明
+============
+
+无
+
+begin
+^^^^^^^^^
+
+描述
+======
+
+初始化函数
+
+.. note::
+
+    在调用该函数之前，需要调用 ``wire->begin(scl, sda)``，进行引脚配置
+
+语法
+======
+
+.. code-block:: arduino
+
+    bool begin(int cal[7] = NULL);
+
+参数
+======
+
+* ``cal`` 校准参数
+
+返回值
+========
+
+* ``sts`` 初始化结果
+
+    * ``true`` 成功
+
+    * ``false`` 失败
+
+示例说明
+============
+
+无
+
+例程 - track.ino
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**在屏幕上画出触摸轨迹**
+
+.. literalinclude:: ../../../libraries/TouchScreen/examples/track/track.ino
+    :language: arduino
