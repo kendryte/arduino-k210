@@ -8,7 +8,7 @@ Use stable release core [package_k210_index.json](https://raw.githubusercontent.
 
 # Documentation
 
-You can read arduino-k210 online documentation on [here](https://developer.canaan-creative.com/index.html?channel=developer#/document/arduino)
+You can read arduino-k210 online documentation on [here](https://developer.canaan-creative.com/index.html?channel=developer#/document/arduino) or [github pages](https://kendryte.github.io/arduino-k210/main/)
 
 # New board adaptation
 
