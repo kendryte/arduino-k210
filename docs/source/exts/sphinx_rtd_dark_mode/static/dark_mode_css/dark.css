@@ -16,7 +16,6 @@ html[data-theme='dark'] .wy-nav-content-wrap {
 html[data-theme='dark'] .wy-nav-content {
   /* background-color: #141414; */
   background-color: #393939;
-  max-width: 900px;
 }
 
 html[data-theme='dark'] .section {
