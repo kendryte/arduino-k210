@@ -106,3 +106,53 @@ k1.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1
 01studio_k210.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
 01studio_k210.menu.enable_only_kmodel_v3.enable=Enable
 01studio_k210.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1
+###############################################################
+
+dnk210.name=Alientek DNK210
+
+dnk210.upload.tool=kflash_py
+dnk210.upload.tool.default=kflash_py
+
+dnk210.upload.maximum_size=6291456
+dnk210.upload.maximum_data_size=6291456
+dnk210.upload.flags=
+dnk210.upload.extra_flags=
+
+dnk210.serial.disableDTR=true
+dnk210.serial.disableRTS=true
+
+dnk210.build.core=k210
+dnk210.build.variant=alientek_dnk210
+dnk210.build.board=DNK210
+dnk210.build.burn_board=dan
+
+dnk210.menu.clk_freq.400=400MHz
+dnk210.menu.clk_freq.500=500MHz
+dnk210.menu.clk_freq.600=600MHz
+dnk210.menu.clk_freq.400.build.f_cpu=400000000UL
+dnk210.menu.clk_freq.500.build.f_cpu=500000000UL
+dnk210.menu.clk_freq.600.build.f_cpu=600000000UL
+
+dnk210.menu.burn_baudrate.1000000=1 Mbps
+dnk210.menu.burn_baudrate.1500000=1.5 Mbps
+dnk210.menu.burn_baudrate.2000000=2 Mbps
+dnk210.menu.burn_baudrate.1000000.build.burn_baudrate=1000000
+dnk210.menu.burn_baudrate.1500000.build.burn_baudrate=1500000
+dnk210.menu.burn_baudrate.2000000.build.burn_baudrate=2000000
+
+dnk210.menu.enable_console.disable=Disable
+dnk210.menu.enable_console.disable.build.enable_console=0
+dnk210.menu.enable_console.enable=Enable
+dnk210.menu.enable_console.enable.build.enable_console=1
+
+dnk210.menu.stack_size.256K=256K
+dnk210.menu.stack_size.128K=128K
+dnk210.menu.stack_size.64K=64K
+dnk210.menu.stack_size.256K.build.main_stack_size=262144
+dnk210.menu.stack_size.128K.build.main_stack_size=131072
+dnk210.menu.stack_size.64K.build.main_stack_size=65536
+
+dnk210.menu.enable_only_kmodel_v3.disable=Disable
+dnk210.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
+dnk210.menu.enable_only_kmodel_v3.enable=Enable
+dnk210.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1
