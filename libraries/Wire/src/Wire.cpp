@@ -62,7 +62,7 @@ bool TwoWire::begin(int8_t sclPin, int8_t sdaPin, uint32_t frequency)
 
     _sclPin = sclPin;
     _sdaPin = sdaPin;
-    _clockFreq = frequency;
+    // _clockFreq = frequency;
 
     if((sclPin < 0) || (sdaPin < 0)) {
         LOG_E("Invaild sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
