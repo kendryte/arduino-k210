@@ -11,8 +11,8 @@ const createThemeSwitcher = () => {
 };
 
 $(document).ready(() => {
-  // createThemeSwitcher();
-  // $('#themeSwitcher').click(switchTheme);
+  createThemeSwitcher();
+  $('#themeSwitcher').click(switchTheme);
 
   $('footer').html(
     $('footer').html() +

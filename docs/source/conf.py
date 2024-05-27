@@ -48,7 +48,7 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
 
 # if want to add top nav for canann, enable this.
-# html_css_files = ['topbar.css']
+html_css_files = ['topbar.css']
 
 default_dark_mode = True
 

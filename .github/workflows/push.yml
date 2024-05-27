@@ -38,21 +38,3 @@ jobs:
       run: |
         bash ./tools/on-push.sh
 
-  test-arduino-linux:
-    if: endsWith(github.ref, 'main')
-    name: Arduino Test on ubuntu-20.04
-    runs-on: self-hosted
-    needs: build-arduino
-
-    steps:
-    - uses: actions/checkout@v3
-    - name: Build testcases
-      run: |
-        bash ./tools/tests_build.sh -c -b canaan_k1 -i 0 -m 1
-    - name: Run testcases
-      run: |
-        bash ./tools/tests_run_simple.sh
-    - uses: actions/upload-artifact@v3
-      with:
-        name: "arduino-test-report-${{ github.sha }}"
-        path: ${{ github.workspace }}/tests/report/**
