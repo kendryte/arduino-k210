@@ -4,7 +4,6 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import sys, os
-import sphinx_rtd_theme
 
 sys.path.append(os.path.abspath('exts'))
 
@@ -20,11 +19,19 @@ author = 'Canaan'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'sphinx_rtd_dark_mode',
-    'sphinx_copybutton',
-    'sphinx_multiversion'
+   'sphinx_copybutton',
+    'myst_parser',
+    'sphinx_multiversion',
+    'sphinxcontrib.mermaid'
 ]
-
+html_js_files = [
+    'https://cdnjs.cloudflare.com/ajax/libs/mermaid/8.13.8/mermaid.min.js',
+    'init_mermaid.js',
+]
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 templates_path = ['_templates']
 exclude_patterns = []
 
@@ -43,32 +50,22 @@ html_favicon = 'favicon.ico'
 
 # html_show_sphinx = False
 
-# html_theme = 'alabaster'
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"
 html_static_path = ['_static']
-
+html_sidebars = {
+    '**':['navbar-logo.html','search-field.html','sbt-sidebar-nav.html', 'versions.html'],
+}
 # if want to add top nav for canann, enable this.
-html_css_files = ['topbar.css']
+html_css_files = ['topbar.css', 'custom.css']
 
 default_dark_mode = True
 
 smv_tag_whitelist = r'^\d+\.\d+$'
 
 html_theme_options = {
-    # 'analytics_id': 'G-XXXXXXXXXX',  #  Provided by Google in your dashboard
-    # 'analytics_anonymize_ip': False,
-    # 'logo_only': False,
-    'display_version': True,
-    'prev_next_buttons_location': 'bottom',
-    'style_external_links': False,
-    'vcs_pageview_mode': '',
-    # 'style_nav_header_background': '#2980B9',
-    # Toc options
+    "repository_url": "https://github.com/kendryte/arduino-k210",
     'collapse_navigation': True,
-    'sticky_navigation': True,
     'navigation_depth': 7,
-    'includehidden': True,
-    'titles_only': False
 }
 
 # Style
