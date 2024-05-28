@@ -52,11 +52,8 @@ html_favicon = 'favicon.ico'
 
 html_theme = "sphinx_book_theme"
 html_static_path = ['_static']
-html_sidebars = {
-    '**':['navbar-logo.html','search-field.html','sbt-sidebar-nav.html', 'versions.html'],
-}
 # if want to add top nav for canann, enable this.
-html_css_files = ['topbar.css', 'custom.css']
+html_css_files = ['topbar.css', 'custom-theme.css']
 
 default_dark_mode = True
 
@@ -66,6 +63,8 @@ html_theme_options = {
     "repository_url": "https://github.com/kendryte/arduino-k210",
     'collapse_navigation': True,
     'navigation_depth': 7,
+    "use_edit_page_button": True,
+    "primary_sidebar_end": ["versionsFlex.html"],
 }
 
 # Style
