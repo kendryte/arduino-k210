@@ -62,8 +62,10 @@ smv_tag_whitelist = r'^\d+\.\d+$'
 html_theme_options = {
     "repository_url": "https://github.com/kendryte/arduino-k210",
     'collapse_navigation': True,
+    'use_repository_button': True,
     'navigation_depth': 7,
     "use_edit_page_button": True,
+    "show_navbar_depth": True,
     "primary_sidebar_end": ["versionsFlex.html"],
 }
 
