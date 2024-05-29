@@ -25,17 +25,3 @@ help:
 mhtml: 
 	@$(SPHINXMULTIVERSION) "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-_templates:
-	mkdir -p $(SOURCEDIR)/_templates
-
-$(SOURCEDIR)/_templates/versionsFlex.html: 
-	wget $(WEB_DOCS_BUILDER_URL)/_templates/$(@F) -O $@
-
-$(SOURCEDIR)/_static/topbar.css:
-	wget $(WEB_DOCS_BUILDER_URL)/_static/$(@F) -O $@
-
-$(SOURCEDIR)/_static/custom-theme.css:
-	wget $(WEB_DOCS_BUILDER_URL)/_static/$(@F) -O $@
-
-$(SOURCEDIR)/_static/init_mermaid.js:
-	wget $(WEB_DOCS_BUILDER_URL)/_static/$(@F) -O $@

@@ -64,8 +64,7 @@ html_theme_options = {
     'collapse_navigation': True,
     'use_repository_button': True,
     'navigation_depth': 7,
-    "show_navbar_depth": True,
-    "use_edit_page_button": True,
+    "show_navbar_depth": 2,
     "primary_sidebar_end": ["versionsFlex.html"],
 }
 
