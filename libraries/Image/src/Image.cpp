@@ -88,7 +88,7 @@ namespace K210
         w = 0;
         h = 0;
         bpp = 0;
-        format = IMAGE_FORMAT_INVAILD;
+        format = IMAGE_FORMAT_INVALID;
         pixel = NULL;
         user_buffer = false;
         buffer_not_align = false;
