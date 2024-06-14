@@ -40,7 +40,7 @@ void HardwareSerial::begin(unsigned long baud, uint32_t config, int8_t rxPin, in
     }
 
     if (rxPin < 0 && txPin < 0) {
-        LOG_E("Invaild rxPin(%d) or txPin(%d)\n", rxPin, txPin);
+        LOG_E("Invalid rxPin(%d) or txPin(%d)\n", rxPin, txPin);
         return;
     }
 

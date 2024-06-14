@@ -26,7 +26,7 @@ TwoWire::TwoWire(int busNum)
     ,user_onReceive(NULL)
 {
     if(busNum >= I2C_DEVICE_MAX) {
-        LOG_E("TwoWire Invaild busNum %d\n", busNum);
+        LOG_E("TwoWire Invalid busNum %d\n", busNum);
         return;
     }
     _i2cNum = (i2c_device_number_t)busNum;
@@ -44,7 +44,7 @@ bool TwoWire::begin(int8_t sclPin, int8_t sdaPin, uint32_t frequency)
     char _lock_name[32]; // real max len 8
 
     if(_i2cNum >= I2C_DEVICE_MAX) {
-        LOG_E("TwoWire Invaild _i2cNum %d\n", _i2cNum);
+        LOG_E("TwoWire Invalid _i2cNum %d\n", _i2cNum);
         started = false;
         goto _end;
     }
@@ -65,7 +65,7 @@ bool TwoWire::begin(int8_t sclPin, int8_t sdaPin, uint32_t frequency)
     // _clockFreq = frequency;
 
     if((sclPin < 0) || (sdaPin < 0)) {
-        LOG_E("Invaild sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
+        LOG_E("Invalid sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
         return false;
     }
 
@@ -129,7 +129,7 @@ bool TwoWire::begin(uint16_t address, int8_t sclPin, int8_t sdaPin, uint32_t fre
     _slaveTransmitting = false;
 
     if((sclPin < 0) || (sdaPin < 0)) {
-        LOG_E("Invaild sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
+        LOG_E("Invalid sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
         return false;
     }
 

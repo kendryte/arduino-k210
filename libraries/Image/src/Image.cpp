@@ -1106,7 +1106,7 @@ namespace K210
             (0x00 == img->h) ||
             (0x00 == img->bpp))
         {
-            LOG_E("Invaild image.");
+            LOG_E("Invalid image.");
             return -1;
         }
 

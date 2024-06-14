@@ -43,7 +43,7 @@ typedef enum _aes_kmode
 
 typedef enum _aes_iv_len
 {
-    IV_LEN_INVAILD = 0,
+    IV_LEN_INVALID = 0,
     IV_LEN_96 = 12,
     IV_LEN_128 = 16,
 } aes_iv_len_t;

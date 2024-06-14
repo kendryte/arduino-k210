@@ -22,19 +22,19 @@ aes_iv_len_t        AES::_ivLen             = IV_LEN_128;
 
 /* static */ int AES::begin(aes_cipher_mode_t mode, aes_kmode_t keyLen)
 {
-    return begin(mode, keyLen, IV_LEN_INVAILD);
+    return begin(mode, keyLen, IV_LEN_INVALID);
 }
 
 /* static */ int AES::begin(aes_cipher_mode_t mode, aes_kmode_t keyLen, aes_iv_len_t ivLen)
 {
     if(AES_CIPHER_MAX <= mode) {
-        LOG_E("Invaild mode");
+        LOG_E("Invalid mode");
         return -1;
     }
     _mode = mode;
 
     if((AES_128 != keyLen) && (AES_192 != keyLen) && (AES_256 != keyLen)) {
-        LOG_E("Invaild keyLen");
+        LOG_E("Invalid keyLen");
         return -1;
     }
     _keyLen = keyLen;
