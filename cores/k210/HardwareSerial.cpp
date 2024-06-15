@@ -19,7 +19,7 @@ _rxPin(-1),
 _txPin(-1) 
 {
     if(uartNum >= /* UART_DEVICE_MAX */ 3) {
-        LOG_E("HardwareSerial Invaild uart_num %d\n", uartNum);
+        LOG_E("HardwareSerial Invalid uart_num %d\n", uartNum);
         return;
     }
     _uartNum = uartNum;

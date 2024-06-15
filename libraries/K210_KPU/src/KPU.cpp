@@ -351,7 +351,7 @@ namespace K210
     {
         if((NULL == anchor) || (anchor_num % 2))
         {
-            LOG_E("anchor invaild");
+            LOG_E("anchor invalid");
             return -1;
         }
 
