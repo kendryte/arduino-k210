@@ -44,7 +44,7 @@ Image
         IMAGE_FORMAT_RGB565,        // bpp 2
         IMAGE_FORMAT_RGB888,        // bpp 3
         IMAGE_FORMAT_R8G8B8,        // bpp 3
-        IMAGE_FORMAT_INVAILD = 4,
+        IMAGE_FORMAT_INVALID = 4,
     };
 
 * ``create`` 是否创建图像内存

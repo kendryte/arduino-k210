@@ -45,7 +45,7 @@ dmac_channel_number_t hal_dma_get_free_chn(void)
 void hal_dma_releas_chn(dmac_channel_number_t chn)
 {
     if(chn >= DMA_CHN_NUM) {
-        LOG_E("release invaild chn(%d)", chn);
+        LOG_E("release invalid chn(%d)", chn);
         return;
     }
 

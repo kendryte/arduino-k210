@@ -15,7 +15,7 @@ typedef enum {
     MODE_DATA_HALF,
     MODE_DATA_WORD,
     MODE_DATA_FILL,
-    MODE_INVAILD = 255,
+    MODE_INVALID = 255,
 } tft_bus_mod_t;
 
 struct tft_bus_t {
@@ -38,7 +38,7 @@ static struct tft_bus_t tft_bus = {
     .dcx_pin = -1,
     .csx_pin = -1,
     .clk_pin = -1,
-    .mode = MODE_INVAILD,
+    .mode = MODE_INVALID,
     .cs = SPI_CHIP_SELECT_3,
     .dc_gpio_func = TFT_DCX_GPIO_FUNC,
     .freq = 10 * 1000 * 1000,
@@ -145,7 +145,7 @@ void hal_tft_fill_data(uint32_t *data_buf, uint32_t length)
 void hal_tft_begin(int8_t clk_pin, int8_t cs_pin, int8_t dc_pin, uint32_t freq)
 {
     if((-1 == clk_pin) || (-1 == cs_pin) /* || (-1 == dc_pin) */) {
-        LOG_E("Invaild Pins");
+        LOG_E("Invalid Pins");
         return;
     }
 
@@ -186,7 +186,7 @@ void hal_tft_end(void)
     tft_bus.dcx_pin = -1;
     tft_bus.csx_pin = -1;
     tft_bus.clk_pin = -1;
-    tft_bus.mode = MODE_INVAILD;
+    tft_bus.mode = MODE_INVALID;
     tft_bus.cs = SPI_CHIP_SELECT_3;
     tft_bus.dc_gpio_func = TFT_DCX_GPIO_FUNC;
     tft_bus.freq = 10 * 1000 * 1000;

@@ -31,7 +31,7 @@ public:
 
     /// @brief Control RESET Pin
     /// @param valid Rst Vaild state
-    /// @param rst_ms Set Rst Invaild time
+    /// @param rst_ms Set Rst Invalid time
     static void reset(PinStatus valid, int rst_ms);
 
     /// @brief TFT Bus write command

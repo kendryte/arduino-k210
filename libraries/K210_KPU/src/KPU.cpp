@@ -249,7 +249,7 @@ namespace K210
 
         if(NULL == r8g8b8)
         {
-            LOG_E("invaild input");
+            LOG_E("Invalid input");
             return -1;
         }
 
@@ -306,7 +306,7 @@ namespace K210
     {
         if(IMAGE_FORMAT_R8G8B8 != img->format)
         {
-            LOG_E("Invaild image format");
+            LOG_E("Invalid image format");
             return -1;
         }
 
@@ -351,7 +351,7 @@ namespace K210
     {
         if((NULL == anchor) || (anchor_num % 2))
         {
-            LOG_E("anchor invaild");
+            LOG_E("anchor invalid");
             return -1;
         }
 
@@ -421,7 +421,7 @@ namespace K210
     {
         if(IMAGE_FORMAT_R8G8B8 != img->format)
         {
-            LOG_E("Invaild image format");
+            LOG_E("Invalid image format");
             return -1;
         }
 

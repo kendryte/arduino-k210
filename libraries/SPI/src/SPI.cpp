@@ -121,7 +121,7 @@ void SPIClass::begin(int8_t sckPin, int8_t misoPin, int8_t mosiPin, int8_t csPin
     }
 
     if((-1 == sckPin) /* || (-1 == misoPin) */ || (-1 == mosiPin) /* || (-1 == csPin) */) {
-        LOG_E("Invaild Pins\n");
+        LOG_E("Invalid Pins\n");
         return;
     }
 
@@ -137,7 +137,7 @@ void SPIClass::begin(int8_t sckPin, int8_t misoPin, int8_t mosiPin, int8_t csPin
     spi_chip_select_t chip_sel = spi_acquire_cs_func(_spiBus);
 
     if(SPI_CHIP_SELECT_MAX <= chip_sel) {
-        LOG_E("Invaild cs_func %d\n", chip_sel);
+        LOG_E("Invalid cs_func %d\n", chip_sel);
         failed = true;
         goto _fail;
     }
@@ -161,7 +161,7 @@ void SPIClass::begin(int8_t sckPin, int8_t misoPin, int8_t mosiPin, int8_t csPin
         // } case SPI_BUS_3: {
         //     break;
         } default: {
-            LOG_E("Invaild spi_bus %d\n", _spiBus);
+            LOG_E("Invalid spi_bus %d\n", _spiBus);
             failed = true;
             goto _fail;
             break;
