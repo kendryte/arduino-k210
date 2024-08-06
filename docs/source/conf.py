@@ -10,8 +10,8 @@ sys.path.append(os.path.abspath('exts'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Arduino-K210'
-copyright = '2023 Canaan Inc'
+project = 'K210 Arduino'
+copyright = '2024 Canaan Inc'
 author = 'Canaan'
 # release = '0.1'
 
@@ -32,6 +32,7 @@ source_suffix = {
     '.rst': 'restructuredtext',
     '.md': 'markdown',
 }
+html_title = 'K210 Arduino'
 templates_path = ['_templates']
 exclude_patterns = []
 
