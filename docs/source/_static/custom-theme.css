@@ -49,6 +49,19 @@ nav.bd-links li>a:active, .logo__title:hover, nav.bd-links li>a:hover {
   cite {
     font-style: normal;
   }
+  .bd-footer {
+    background-color: #303846;
+   }
+   .bd-footer .footer-items__end {
+    text-align: left;
+  }
+  .bd-footer .footer-items__center {
+    text-align: left;
+  }
+  .search-button-field:hover {
+    border: 1px solid var(--pst-color-border);
+    box-shadow: 0 0 0 0.1875rem var(--pst-color-link-hover);
+  }
   body {
     counter-reset: h2counter toc-h2counter toctree-l2counter;
 }

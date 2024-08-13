@@ -67,6 +67,10 @@ html_theme_options = {
     'navigation_depth': 7,
     "show_navbar_depth": 2,
     "primary_sidebar_end": ["versionsFlex.html"],
+    "footer_start": ["Fleft.html"],
+	"footer_center": ["Footer.html"],
+	"footer_end" : ["Fright.html"],
+
 }
 
 # Style
