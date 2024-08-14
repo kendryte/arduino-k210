@@ -24,10 +24,6 @@ extensions = [
     'sphinx_multiversion',
     'sphinxcontrib.mermaid'
 ]
-html_js_files = [
-    'https://cdnjs.cloudflare.com/ajax/libs/mermaid/8.13.8/mermaid.min.js',
-    'init_mermaid.js',
-]
 source_suffix = {
     '.rst': 'restructuredtext',
     '.md': 'markdown',
@@ -54,7 +50,7 @@ html_favicon = 'favicon.ico'
 html_theme = "sphinx_book_theme"
 html_static_path = ['_static']
 # if want to add top nav for canann, enable this.
-html_css_files = ['topbar.css', 'custom-theme.css']
+html_css_files = ['custom-theme.css']
 
 default_dark_mode = True
 
