@@ -62,6 +62,9 @@ nav.bd-links li>a:active, .logo__title:hover, nav.bd-links li>a:hover {
     border: 1px solid var(--pst-color-border);
     box-shadow: 0 0 0 0.1875rem var(--pst-color-link-hover);
   }
+  .bd-footer .footer-items__center, .bd-footer .footer-items__end, .bd-footer .footer-items__start {
+    justify-content: flex-start;
+  }
   body {
     counter-reset: h2counter toc-h2counter toctree-l2counter;
 }
