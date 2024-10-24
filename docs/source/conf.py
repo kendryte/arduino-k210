@@ -12,7 +12,7 @@ sys.path.append(os.path.abspath('exts'))
 
 project = 'K210 Arduino'
 copyright = '2024 Canaan Inc'
-author = 'Canaan'
+# author = 'Canaan'
 # release = '0.1'
 
 # -- General configuration ---------------------------------------------------
@@ -23,10 +23,6 @@ extensions = [
     'myst_parser',
     'sphinx_multiversion',
     'sphinxcontrib.mermaid'
-]
-html_js_files = [
-    'https://cdnjs.cloudflare.com/ajax/libs/mermaid/8.13.8/mermaid.min.js',
-    'init_mermaid.js',
 ]
 source_suffix = {
     '.rst': 'restructuredtext',
@@ -54,7 +50,7 @@ html_favicon = 'favicon.ico'
 html_theme = "sphinx_book_theme"
 html_static_path = ['_static']
 # if want to add top nav for canann, enable this.
-html_css_files = ['topbar.css', 'custom-theme.css']
+html_css_files = ['custom-theme.css']
 
 default_dark_mode = True
 
@@ -67,7 +63,15 @@ html_theme_options = {
     'navigation_depth': 7,
     "show_navbar_depth": 2,
     "primary_sidebar_end": ["versionsFlex.html"],
+    "footer_start": ["Fleft.html"],
+	"footer_center": ["Footer.html"],
+	"footer_end" : ["Fright.html"],
+
 }
+if language == 'en':
+    html_theme_options["footer_start"] = ["FleftEn.html"]
+    html_theme_options["footer_center"] = ["FooterEn.html"]
+    html_theme_options["footer_end"] = ["FrightEn.html"]
 
 # Style
 pygments_style = "sphinx"
