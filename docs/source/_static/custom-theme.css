@@ -147,6 +147,12 @@ nav.bd-links li>a:active, .logo__title:hover, nav.bd-links li>a:hover {
   .bd-sidebar-primary {
       font-size: 0.875rem;
   }
+   footer .cancat {
+    margin-top: 0;
+  }
+   .bd-footer .bd-footer__inner {
+    display: flex;
+  }
   }
   @media (min-width: 1200px) {
   .bd-sidebar-secondary {
@@ -154,6 +160,18 @@ nav.bd-links li>a:active, .logo__title:hover, nav.bd-links li>a:hover {
   }
   .page-toc .nav-link {
     font-size: .875rem;
+  }
+  }
+  @media (max-width: 960px) {
+  .bd-footer .bd-footer__inner {
+    display: block;
+  }
+  footer .cancat {
+    margin-bottom: 0;
+    margin-top: 0.5em;
+  }
+  .canact-section {
+    padding-left: 30px;
   }
   }
   .h3,h3,.h5,h5 {
