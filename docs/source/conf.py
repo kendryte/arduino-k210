@@ -66,7 +66,10 @@ html_theme_options = {
     "footer_start": ["Fleft.html"],
 	"footer_center": ["Footer.html"],
 	"footer_end" : ["Fright.html"],
-
+    "navbar_start" : ['logo.html'],
+    "navbar_center" : ['nav.html'],
+    "navbar_end" : ['login.html'],
+    "article_footer_items": ["content.html"]
 }
 if language == 'en':
     html_theme_options["footer_start"] = ["FleftEn.html"]

@@ -1,0 +1,61 @@
+<div class="document-navbar-nav">
+    <span class="nav-item"><a href="/zh/products">产品中心</a></span>
+    <span class="nav-item md-none sm-show"><a href="/zh/resource">资料下载</a></span>
+    <span class="nav-item active"><a href="/zh/document">文档中心</a></span>
+    <span class="nav-item md-none sm-show"><a href="/zh/model/library">模型库</a></span>
+    <span class="nav-item md-none sm-show"><a href="/zh/training/start">模型训练</a></span>
+    <span class="nav-item"><a href="/zh/blog">博客</a></span>
+    <!-- 添加点击事件 -->
+    <span class="nav-item bbs" onclick="goBbs()">问答社区 <img src="https://www.kendryte.com/img/hot.ebb7d69e.svg"
+            style="transform: translateY(-50%)" alt="" /></span>
+</div>
+<!-- 写样式 -->
+<style>
+    .document-navbar-nav .nav-item {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        margin-right: 20px;
+        cursor: pointer;
+    }
+
+    .document-navbar-nav .nav-item a {
+        color: #303133;
+    }
+
+    .document-navbar-nav .nav-item a:hover {
+        color: #66819d;
+    }
+
+    .document-navbar-nav .active a {
+        color: #002D5C;
+        font-weight: 700;
+    }
+
+    .document-navbar-nav .bbs {
+        color: #d12d26;
+    }
+
+    .document-navbar-nav .bbs:hover {
+        color: rgb(231, 100, 100);
+    }
+
+    @media screen and (max-width: 1200px) {
+        .document-navbar-nav .md-none {
+            display: none !important;
+        }
+    }
+
+    @media screen and (max-width: 960px) {
+        .document-navbar-nav .nav-item  {
+            display: block !important;
+        }
+        .document-user-info {
+            display: none !important;
+        }
+    }
+</style>
+<script>
+    function goBbs() {
+        location.href = `/answer/`
+    }
+</script>
