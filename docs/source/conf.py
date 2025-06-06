@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath('exts'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'K210 Arduino'
-copyright = '2024 Canaan Inc'
+copyright = '2025 嘉楠 | ' + '京ICP备2025124317号 | 京公网安备11010802045870号'
 # author = 'Canaan'
 # release = '0.1'
 
