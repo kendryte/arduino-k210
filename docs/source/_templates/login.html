@@ -17,82 +17,93 @@
     <a class="jn_user-btn" onclick="goRegister()">注册</a>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <script>
-  function goLogin() {
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    if (currentUser && currentUser.id) {
-      return;
+  if (!window._LOGIN_LOADED) {
+    console.log("1111111111，header login.js loaded");
+    window._LOGIN_LOADED = true;
+
+    function goLogin() {
+      const currentUser = JSON.parse(sessionStorage.getItem("user"));
+      if (currentUser && currentUser.id) {
+        return;
+      }
+      location.href = "/ssoLogin/?website=" + location.href;
     }
-    location.href = "/ssoLogin/?website=" + location.href;
-  }
-  function goUser(event) {
-    event.stopPropagation();
-    location.href = "/zh/user";
-  }
-  function goRegister() {
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    if (currentUser && currentUser.id) {
-      return;
+
+    function goUser(event) {
+      event.stopPropagation();
+      location.href = "/zh/user";
     }
-    location.href = "/ssoRegister/?website=" + location.href;
-  }
-  async function getUser() {
-    // 同步检查 sessionStorage
-    const cachedUser = sessionStorage.getItem("user");
-    if (cachedUser) {
-      return JSON.parse(cachedUser);
+
+    function goRegister() {
+      const currentUser = JSON.parse(sessionStorage.getItem("user"));
+      if (currentUser && currentUser.id) {
+        return;
+      }
+      location.href = "/ssoRegister/?website=" + location.href;
     }
-    // 异步请求数据
-    try {
-      const res = await axios.get("/api/user");
-      sessionStorage.setItem("user", JSON.stringify(res.data));
-      return res.data;
-    } catch (error) {
-      console.error("获取用户信息失败", error);
-      return null; // 或 throw error 让调用方处理
+    async function getUser() {
+      const cachedUser = sessionStorage.getItem("user");
+      if (cachedUser) {
+        return JSON.parse(cachedUser);
+      }
+      // 异步请求数据
+      try {
+        const res = await axios.get("/api/user");
+	if(!res.data.username) return false;
+        sessionStorage.setItem("user", JSON.stringify(res.data));
+        return res.data;
+      } catch (error) {
+        console.error("获取用户信息失败", error);
+        return null; // 或 throw error 让调用方处理
+      }
     }
-  }
-  window.onload = async function () {
+
     function getMd5OfEmail(email) {
       const emailLowercase = email.toLowerCase();
       const md5Hash = CryptoJS.MD5(emailLowercase).toString();
       return md5Hash;
     }
-    const jn_user_name = document.querySelector(".jn_user-name");
-    const user_avatar = document.querySelector(".user-avatar"); //头像
-    const jn_user_info = document.querySelector(".name-info"); //用户信息
-    const jn_user_btns = document.querySelector(".jn_user-btns"); //登录注册按钮
-    const Dropdown_menu = document.querySelector(".Dropdown-menu"); //下拉菜单
-    const userInfo = await getUser(); // 注意：需在 async 函数中使用
-    if (userInfo) {
-      jn_user_info.style.display = "block";
-      jn_user_btns.style.display = "none";
-      if (userInfo.nickname) {
-        jn_user_name.innerHTML = userInfo.nickname;
-      } else if (userInfo.username) {
-        jn_user_name.innerHTML = userInfo.username;
-      }
-      let avatarUrl = userInfo.avatar;
-      if (avatarUrl) {
-        avatarUrl += `?id=${userInfo.id}&t=${userInfo.id}`; // 添加查询参数
-      } else {
-        avatarUrl = `https://cravatar.cn/avatar/${getMd5OfEmail(
+
+    async function loginInit() {
+      const jn_user_name = document.querySelector(".jn_user-name");
+      const user_avatar = document.querySelector(".user-avatar"); //头像
+      const jn_user_info = document.querySelector(".name-info"); //用户信息
+      const jn_user_btns = document.querySelector(".jn_user-btns"); //登录注册按钮
+      const Dropdown_menu = document.querySelector(".Dropdown-menu"); //下拉菜单
+      const userInfo = await getUser(); // 注意：需在 async 函数中使用
+      if (userInfo && userInfo.username) {
+        jn_user_info.style.display = "block";
+        jn_user_btns.style.display = "none";
+        if (userInfo.nickname) {
+          jn_user_name.innerHTML = userInfo.nickname;
+        } else if (userInfo.username) {
+          jn_user_name.innerHTML = userInfo.username;
+        }
+        let avatarUrl = userInfo.avatar;
+        if (avatarUrl) {
+          avatarUrl += `?id=${userInfo.id}&t=${userInfo.id}`; // 添加查询参数
+        } else {
+          avatarUrl = `https://cravatar.cn/avatar/${getMd5OfEmail(
           userInfo.email
         )}?d=retro&f=y`;
+        }
+        user_avatar.src = avatarUrl;
+        user_avatar.style.backgroundImage = `url(${avatarUrl})`;
+        user_avatar.style.backgroundSize = "cover";
+      } else {
+        jn_user_info.style.display = "none";
+        jn_user_btns.style.display = "block";
       }
-      user_avatar.src = avatarUrl;
-      user_avatar.style.backgroundImage = `url(${avatarUrl})`;
-      user_avatar.style.backgroundSize = "cover";
-    } else {
-      jn_user_info.style.display = "none";
-      jn_user_btns.style.display = "block";
+      jn_user_info.addEventListener("click", function (event) {
+        event.stopPropagation();
+        Dropdown_menu.style.display =
+          Dropdown_menu.style.display === "none" ? "block" : "none";
+      });
     }
-    jn_user_info.addEventListener("click", function (event) {
-      event.stopPropagation();
-      Dropdown_menu.style.display =
-        Dropdown_menu.style.display === "none" ? "block" : "none";
-    });
-  };
+    loginInit();
+  }
 </script>
 <!-- 增加css -->
 <style>
@@ -172,8 +183,7 @@
   }
 
   .document-user-info .item-profile a {
-    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACi0lEQVRYR+2Wy3EbMQyGAc6Ie4xcQeQKIlcQ6SKuTokriFOBlQqcDixXEKuC6LbkXmRVEKWCqAOvr5oRkYGHzDDrfXDXyfhiHLlc4iPwAwTCCxu+sH+IBsiybCSEuCSiMSKOiahAxB0A7Iho4tcAYA8A6yRJVtPptGi7YBSA1nqBiNcAsOLDrbWFEOICAD7VOSCivRDifDabMWSttQIYY74CAANM/GF5nl8Q0be22/F3RDxrgmgEyLJsIoRYh85dKn4AwDAGgCORJMlZXToaAbTW7HynlOIoPJox5rYp9FVQRPQlTdNl1bdagM1mMzwcDvfW2tP5fM7C8gAsrDcxtw/2bJVSk04ALvwbpdRfkMYY6uictxdKqZM+AN/DH31UegBA+SL+jNoUOLH9klKehALqGYHuKXCC2yHicjabsfAezQnzQ5coENFNmqaLTingzVzv1tqrsIy8NjoAPFhrx6GQw39bG5G78Vsp5dSnQmu9RMTLGAhE/BxGsPxPK4ATHtcwh31hrd3ybWL6QVP9t4qwTGqM+QgA3JDeBd8e+DECgPfhGhHdEdGiLuydUlAV5jzPx4PBYB9WB68dj8cixumzAWJyH7unVQP+INcXONQjABi7dZ4FeC4Y8kzAswAi7ololyTJ9p/MA+wYEa8Qkd//n5xfdh5RBfxmLKWUN00gjRFw7/41EW29qJwYeRaIfo6bBpNaAD90hHXcZRApaYDTNK0aTCoBgm53rpRau67IcyAPIn2tkFKeltNRCaC1ZjHdlgYRrvewB/QBWSmlWEt/7AmACzOLZ+Rpe/T/WrjygPMEwBjDKr/nV9CfwgIEAO6Ez7Zye64DeLajhgPuwtRGN6L/RfQK8BqB38AuVjD+RLVIAAAAAElFTkSuQmCC")
-      no-repeat left center;
+    background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACi0lEQVRYR+2Wy3EbMQyGAc6Ie4xcQeQKIlcQ6SKuTokriFOBlQqcDixXEKuC6LbkXmRVEKWCqAOvr5oRkYGHzDDrfXDXyfhiHLlc4iPwAwTCCxu+sH+IBsiybCSEuCSiMSKOiahAxB0A7Iho4tcAYA8A6yRJVtPptGi7YBSA1nqBiNcAsOLDrbWFEOICAD7VOSCivRDifDabMWSttQIYY74CAANM/GF5nl8Q0be22/F3RDxrgmgEyLJsIoRYh85dKn4AwDAGgCORJMlZXToaAbTW7HynlOIoPJox5rYp9FVQRPQlTdNl1bdagM1mMzwcDvfW2tP5fM7C8gAsrDcxtw/2bJVSk04ALvwbpdRfkMYY6uictxdKqZM+AN/DH31UegBA+SL+jNoUOLH9klKehALqGYHuKXCC2yHicjabsfAezQnzQ5coENFNmqaLTingzVzv1tqrsIy8NjoAPFhrx6GQw39bG5G78Vsp5dSnQmu9RMTLGAhE/BxGsPxPK4ATHtcwh31hrd3ybWL6QVP9t4qwTGqM+QgA3JDeBd8e+DECgPfhGhHdEdGiLuydUlAV5jzPx4PBYB9WB68dj8cixumzAWJyH7unVQP+INcXONQjABi7dZ4FeC4Y8kzAswAi7ololyTJ9p/MA+wYEa8Qkd//n5xfdh5RBfxmLKWUN00gjRFw7/41EW29qJwYeRaIfo6bBpNaAD90hHXcZRApaYDTNK0aTCoBgm53rpRau67IcyAPIn2tkFKeltNRCaC1ZjHdlgYRrvewB/QBWSmlWEt/7AmACzOLZ+Rpe/T/WrjygPMEwBjDKr/nV9CfwgIEAO6Ez7Zye64DeLajhgPuwtRGN6L/RfQK8BqB38AuVjD+RLVIAAAAAElFTkSuQmCC") no-repeat left center;
     background-size: auto 80%;
   }
 
@@ -191,6 +201,7 @@
   .document-user-info .Dropdown-menu li:hover {
     background-color: rgba(0, 0, 0, 0.3);
   }
+
   @media screen and (max-width: 960px) {
     .document-user-info {
       display: none !important;

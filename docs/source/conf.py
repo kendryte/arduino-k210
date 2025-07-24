@@ -50,7 +50,11 @@ html_favicon = 'favicon.ico'
 html_theme = "sphinx_book_theme"
 html_static_path = ['_static']
 # if want to add top nav for canann, enable this.
-html_css_files = ['custom-theme.css']
+html_css_files = ['custom-theme.css', 'auto-nums.css']
+
+html_js_files = [
+    'transform.js'
+]
 
 default_dark_mode = True
 
