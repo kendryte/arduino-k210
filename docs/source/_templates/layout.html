@@ -1,24 +1,27 @@
 <!-- _templates/layout.html -->
-{% extends "!layout.html" %}
-
-{% block extrahead %}
-{{ super() }}
+{% extends "!layout.html" %} {% block extrahead %} {{ super() }}
 <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-7J9HL06P02');
-  </script>
-
-  <script>
-        var _hmt = _hmt || [];
-    window._hmt = _hmt; // 修改为window 全局变量
-    (function() {
-      var hm = document.createElement("script");
-      hm.src = "https://hm.baidu.com/hm.js?d4832d9026d5bdd9eca72f27bb63dfb3"; //此处请替换你的站点i
-      var s = document.getElementsByTagName("script")[0]; 
-      s.parentNode.insertBefore(hm, s);
-    })();
-    </script>
+  (function (c, l, a, r, i, t, y) {
+    c[a] =
+      c[a] ||
+      function () {
+        (c[a].q = c[a].q || []).push(arguments);
+      };
+    t = l.createElement(r);
+    t.async = 1;
+    t.src = "https://www.clarity.ms/tag/" + i;
+    y = l.getElementsByTagName(r)[0];
+    y.parentNode.insertBefore(t, y);
+  })(window, document, "clarity", "script", "tqhe6w0zs6");
+</script>
+<script>
+  var _hmt = _hmt || [];
+  window._hmt = _hmt; // 修改为window 全局变量
+  (function () {
+    var hm = document.createElement("script");
+    hm.src = "https://hm.baidu.com/hm.js?d4832d9026d5bdd9eca72f27bb63dfb3"; //此处请替换你的站点i
+    var s = document.getElementsByTagName("script")[0];
+    s.parentNode.insertBefore(hm, s);
+  })();
+</script>
 {% endblock %}
