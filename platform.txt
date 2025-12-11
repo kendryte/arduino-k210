@@ -2,7 +2,7 @@ name=K210 Arduino
 version=0.9.91
 
 # Compilers
-tools.xpack-riscv-none-embed-gcc.path={runtime.platform.path}/tools/xpack-riscv-none-embed-gcc
+tools.xpack-riscv-none-embed-gcc.path={runtime.tools.xpack-riscv-none-embed-gcc.path}
 compiler.path={tools.xpack-riscv-none-embed-gcc.path}/bin/
 compiler.prefix=riscv-none-embed-
 
@@ -90,7 +90,7 @@ recipe.size.regex.data=\s*[0-9]+\s+[0-9]+\s+[0-9]+\s+([0-9]+).*
 ## KFlash
 ## ------
 
-tools.kflash_py.path={runtime.platform.path}/tools/kflash_py
+tools.kflash_py.path={runtime.tools.kflash_py.path}
 tools.kflash_py.cmd=kflash.py
 tools.kflash_py.cmd.windows=kflash.exe
 
