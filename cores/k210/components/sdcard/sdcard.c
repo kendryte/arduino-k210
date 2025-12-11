@@ -305,6 +305,9 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
 }
 
 int spisd_get_card_info(spisd_info_t *cardinfo) {
+    uint8_t temp[16];
+    uint8_t debug_buf[8] = {0};
+    
     _io->wr_rd_byte(DUMMY_BYTE);
 
     /* Send CMD9, Read CSD */
@@ -318,8 +321,6 @@ int spisd_get_card_info(spisd_info_t *cardinfo) {
         return response;
     }
 
-    uint8_t temp[16];
-    
     uint8_t data_token = 0xFF;
     uint32_t timeout = CMD_WAIT_RESP_TIMEOUT * 2; // 给数据token更多时间
     
@@ -338,8 +339,6 @@ int spisd_get_card_info(spisd_info_t *cardinfo) {
 
         /* 调试：读取接下来的几个字节看看 */
         _io->select();
-
-        uint8_t debug_buf[8];
 
         for (int j = 0; j < 8; j++) {
             debug_buf[j] = _io->wr_rd_byte(DUMMY_BYTE);
