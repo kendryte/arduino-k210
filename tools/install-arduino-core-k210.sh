@@ -50,12 +50,12 @@ if [ ! -d "$ARDUINO_K210_TOOLS_PATH" ] || [ ! -d "${ARDUINO_K210_TOOLS_PATH}/xpa
     cd $script_init_path
 fi
 
-if [ -L "${ARDUINO_K210_PATH}/tools/kflash_py" ]; then
-    rm -r "${ARDUINO_K210_PATH}/tools/kflash_py"
+if [ -L "${ARDUINO_IDE_PATH}/tools/kflash_py" ]; then
+    rm -r "${ARDUINO_IDE_PATH}/tools/kflash_py"
 fi
-ln -sf "${ARDUINO_K210_TOOLS_PATH}/kflash_py" "${ARDUINO_K210_PATH}/tools/kflash_py"
+ln -sf "${ARDUINO_K210_TOOLS_PATH}/kflash_py" "${ARDUINO_IDE_PATH}/tools/kflash_py"
 
-if [ -L "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc" ]; then
-    rm -r "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
+if [ -L "${ARDUINO_IDE_PATH}/tools/xpack-riscv-none-embed-gcc" ]; then
+    rm -r "${ARDUINO_IDE_PATH}/tools/xpack-riscv-none-embed-gcc"
 fi
-ln -sf "${ARDUINO_K210_TOOLS_PATH}/xpack-riscv-none-embed-gcc" "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
+ln -sf "${ARDUINO_K210_TOOLS_PATH}/xpack-riscv-none-embed-gcc" "${ARDUINO_IDE_PATH}/tools/xpack-riscv-none-embed-gcc"
