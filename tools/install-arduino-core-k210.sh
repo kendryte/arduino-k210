@@ -59,5 +59,3 @@ if [ -L "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc" ]; then
     rm -r "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
 fi
 ln -sf "${ARDUINO_K210_TOOLS_PATH}/xpack-riscv-none-embed-gcc" "${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
-
-tree -d "${ARDUINO_USR_PATH}"

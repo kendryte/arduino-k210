@@ -23,12 +23,15 @@ function build(){
         args+=" -i $chunk_index -m $chunks_cnt"
         args+=" -prefs=runtime.tools.xpack-riscv-none-embed-gcc.path=${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
         args+=" -prefs=runtime.tools.kflash_py.path=${ARDUINO_K210_PATH}/tools/kflash_py"
+
         echo "Building sketch: $sketch with args: ${args}"
+
         ${BUILD_SKETCHES} "${args}"
     else
         for sketch in ${sketches}; do
             args+=" -s $(dirname $sketch)"
-
+            args+=" -prefs=runtime.tools.xpack-riscv-none-embed-gcc.path=${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
+            args+=" -prefs=runtime.tools.kflash_py.path=${ARDUINO_K210_PATH}/tools/kflash_py"
             if [ "$OS_IS_WINDOWS" == "1" ]; then
                 local ctags_version=`ls "$ARDUINO_IDE_PATH/tools-builder/ctags/"`
                 local preprocessor_version=`ls "$ARDUINO_IDE_PATH/tools-builder/arduino-preprocessor/"`
@@ -36,7 +39,9 @@ function build(){
                 -prefs=runtime.tools.arduino-preprocessor.path=$ARDUINO_IDE_PATH/tools-builder/arduino-preprocessor/$preprocessor_version"
                 args+=" ${win_opts}"
             fi
+
             echo "Building sketch: $sketch with args: ${args}"
+
             ${BUILD_SKETCH} "${args}"
         done
     fi
