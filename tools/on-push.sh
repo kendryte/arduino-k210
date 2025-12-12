@@ -25,6 +25,8 @@ function build(){
     else
         for sketch in ${sketches}; do
             args+=" -s $(dirname $sketch)"
+            args+="-prefs=runtime.tools.xpack-riscv-none-embed-gcc.path=${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
+            args+="-prefs=runtime.tools.kflash_py.path=${ARDUINO_K210_PATH}/tools/kflash_py"
             if [ "$OS_IS_WINDOWS" == "1" ]; then
                 local ctags_version=`ls "$ARDUINO_IDE_PATH/tools-builder/ctags/"`
                 local preprocessor_version=`ls "$ARDUINO_IDE_PATH/tools-builder/arduino-preprocessor/"`
