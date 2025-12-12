@@ -38,6 +38,11 @@ namespace K210
         int cut(Image *dst, rectangle_t &r, bool create = true);
         Image * cut(rectangle_t &r);
 
+        // Generic cut and convert function
+        static int cut_to_new_format(Image *src, Image *dst, rectangle_t &r, image_format_t new_format, bool create);
+        int cut_to_new_format(Image *dst, rectangle_t &r, image_format_t new_format, bool create = true);
+        Image * cut_to_new_format(rectangle_t &r, image_format_t new_format);
+
         // resize origin image to new size
         static int resize(Image *src, Image *dst, uint32_t width, uint32_t height, bool create);
         int resize(Image *dst, uint32_t width, uint32_t height, bool create = true);
@@ -48,20 +53,36 @@ namespace K210
         int to_grayscale(Image *dst, bool create = true);
         Image * to_grayscale(void);
 
+        // cut and convert image to grayscale
+        int cut_to_grayscale(Image *dst, rectangle_t &r, bool create = true);
+        Image * cut_to_grayscale(rectangle_t &r);
+
         // convert image to rgb565
         static int to_rgb565(Image *src, Image *dst, bool create);
         int to_rgb565(Image *dst, bool create = true);
         Image * to_rgb565(void);
+
+        // cut and convert image to rgb565
+        int cut_to_rgb565(Image *dst, rectangle_t &r, bool create = true);
+        Image * cut_to_rgb565(rectangle_t &r);
 
         // convert image to rgb888
         static int to_rgb888(Image *src, Image *dst, bool create);
         int to_rgb888(Image *dst, bool create = true);
         Image * to_rgb888(void);
 
+        // cut and convert image to rgb888
+        int cut_to_rgb888(Image *dst, rectangle_t &r, bool create = true);
+        Image * cut_to_rgb888(rectangle_t &r);
+
         // convert image to r8g8b8 for ai inference
         static int to_r8g8b8(Image *src, Image *dst, bool create);
         int to_r8g8b8(Image *dst, bool create = true);
         Image * to_r8g8b8(void);
+
+        // cut and convert image to r8g8b8
+        int cut_to_r8g8b8(Image *dst, rectangle_t &r, bool create = true);
+        Image * cut_to_r8g8b8(rectangle_t &r);
 
         static int load_bmp(Image *dst, fs::FS &fs, const char *name);
         static Image * load_bmp(fs::FS &fs, const char *name);

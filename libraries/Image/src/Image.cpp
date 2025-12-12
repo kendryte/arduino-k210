@@ -977,6 +977,436 @@ namespace K210
         return img;
     }
 
+    #define GET_PIXEL_PTR(img, x, y) \
+        ((img)->pixel + ((y) * (img)->w + (x)) * (img)->bpp)
+
+    int Image::cut_to_new_format(Image *src, Image *dst, rectangle_t &r, image_format_t new_format, bool create)
+    {
+        if (NULL == src->pixel)
+        {
+            LOG_E("Origin image no pixels");
+            return -1;
+        }
+
+        uint32_t ow = src->w; /* origin image width */
+        uint32_t oh = src->h; /* origin image height */
+
+        uint32_t dst_w = r.w;
+        uint32_t dst_h = r.h;
+        image_format_t dst_format = new_format;
+        uint32_t dst_bpp = format_to_bpp(dst_format);
+
+        if ((r.x > ow) || ((r.x + r.w) > ow) ||
+            (r.y > oh) || ((r.y + r.h) > oh))
+        {
+            LOG_E("cut out image too large for origin image.");
+            return -1;
+        }
+
+        // --- Allocation and initialization block (Unchanged) ---
+        if (false == create)
+        {
+            if (NULL == dst->pixel)
+            {
+                LOG_E("dst image no pixel buffer");
+                return -1;
+            }
+            if ((dst_w != dst->w) ||
+                (dst_h != dst->h) ||
+                (dst_bpp != dst->bpp) ||
+                (dst_format != dst->format))
+            {
+                LOG_E("dst image format or size mismatch in non-create mode.");
+                return -1;
+            }
+        }
+        else // create == true
+        {
+            // 1. Set new properties based on cut area and new format
+            dst->w = dst_w;
+            dst->h = dst_h;
+            dst->bpp = dst_bpp;
+            dst->format = dst_format;
+            dst->user_buffer = false; 
+
+            // 2. Free old buffer if present and not user-provided
+            if (dst->pixel && !dst->user_buffer)
+            {
+                LOG_W("free old pixel buffer %p", dst->pixel);
+                rt_free_align(dst->pixel);
+                dst->pixel = NULL;
+            }
+
+            // 3. Allocate new buffer
+            uint32_t size = dst_w * dst_h * dst_bpp;
+            dst->pixel = (uint8_t *)rt_malloc_align(size, 8);
+
+            if (NULL == dst->pixel)
+            {
+                LOG_E("Malloc failed for dst buffer");
+                return -1;
+            }
+        }
+        // --- End of Allocation block ---
+
+        uint32_t x, y;
+
+        // Handle direct cut (same format)
+        if (src->format == dst_format)
+        {
+            if (dst_format == IMAGE_FORMAT_R8G8B8)
+            {
+                uint32_t s_plane_size = src->w * src->h;
+                uint32_t d_plane_size = dst_w * dst_h;
+                uint32_t bytes_to_copy = dst_w;
+
+                for (uint32_t plane = 0; plane < src->bpp; plane++) 
+                {
+                    uint8_t *s_base = src->pixel + s_plane_size * plane;
+                    uint8_t *d_base = dst->pixel + d_plane_size * plane;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *s_ptr = s_base + (r.y + y) * src->w + r.x;
+                        uint8_t *d_ptr = d_base + y * dst_w;
+                        memcpy(d_ptr, s_ptr, bytes_to_copy);
+                    }
+                }
+            }
+            else // Standard case for packed/contiguous formats (RGB565, RGB888, GRAYSCALE)
+            {
+                // This original logic works for packed formats (RGB565, RGB888) and single-channel (GRAYSCALE)
+                for (y = 0; y < dst_h; y++)
+                {
+                    uint8_t *src_ptr = GET_PIXEL_PTR(src, r.x, r.y + y);
+                    uint8_t *dst_ptr = GET_PIXEL_PTR(dst, 0, y);
+                    memcpy(dst_ptr, src_ptr, dst_w * dst_bpp);
+                }
+            }
+            return 0;
+        }
+        // ----------------------------------------------------------------------
+        // --- FIX ENDS HERE ---
+
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_RGB565 (2 BPP, Packed Source) ---
+        // ----------------------------------------------------------------------
+        if (src->format == IMAGE_FORMAT_RGB565)
+        {
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_R8G8B8: // Planar Destination
+                {
+                    uint32_t d_plane_size = dst_w * dst_h;
+                    uint8_t *d_r = dst->pixel;
+                    uint8_t *d_g = d_r + d_plane_size;
+                    uint8_t *d_b = d_g + d_plane_size;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *src_ptr_row = (uint16_t *)GET_PIXEL_PTR(src, r.x, r.y + y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            uint32_t d_offset = y * dst_w + x; // Planar offset
+
+                            d_r[d_offset] = COLOR_RGB565_TO_R8(pixel565);
+                            d_g[d_offset] = COLOR_RGB565_TO_G8(pixel565);
+                            d_b[d_offset] = COLOR_RGB565_TO_B8(pixel565);
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_RGB888: // Packed Destination
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *src_ptr_row = (uint16_t *)GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            
+                            dst_ptr_row[0] = COLOR_RGB565_TO_R8(pixel565);
+                            dst_ptr_row[1] = COLOR_RGB565_TO_G8(pixel565);
+                            dst_ptr_row[2] = COLOR_RGB565_TO_B8(pixel565);
+
+                            dst_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *src_ptr_row = (uint16_t *)GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            
+                            #ifdef COLOR_RGB565_TO_GRAYSCALE
+                            dst_ptr_row[x] = COLOR_RGB565_TO_GRAYSCALE(pixel565);
+                            #else
+                            uint8_t r8 = COLOR_RGB565_TO_R8(pixel565);
+                            uint8_t g8 = COLOR_RGB565_TO_G8(pixel565);
+                            uint8_t b8 = COLOR_RGB565_TO_B8(pixel565);
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                            #endif
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported RGB565 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_RGB888 (3 BPP, Packed Source) ---
+        // ----------------------------------------------------------------------
+        if (src->format == IMAGE_FORMAT_RGB888)
+        {
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_RGB565:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint16_t *dst_ptr_row = (uint16_t *)GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint8_t r8 = src_ptr_row[0];
+                            uint8_t g8 = src_ptr_row[1];
+                            uint8_t b8 = src_ptr_row[2];
+
+                            dst_ptr_row[x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+
+                            src_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_R8G8B8: // Planar Destination
+                {
+                    uint32_t d_plane_size = dst_w * dst_h;
+                    uint8_t *d_r = dst->pixel;
+                    uint8_t *d_g = d_r + d_plane_size;
+                    uint8_t *d_b = d_g + d_plane_size;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t d_offset = y * dst_w + x; // Planar offset
+
+                            d_r[d_offset] = src_ptr_row[0];
+                            d_g[d_offset] = src_ptr_row[1];
+                            d_b[d_offset] = src_ptr_row[2];
+
+                            src_ptr_row += 3; // Source is packed
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint8_t r8 = src_ptr_row[0];
+                            uint8_t g8 = src_ptr_row[1];
+                            uint8_t b8 = src_ptr_row[2];
+                            
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                            
+                            src_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported RGB888 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_R8G8B8 (3 BPP, Planar Source) ---
+        // ----------------------------------------------------------------------
+        if (src->format == IMAGE_FORMAT_R8G8B8)
+        {
+            // Calculate source plane pointers once
+            uint32_t s_plane_size = src->w * src->h;
+            uint8_t *s_r_base = src->pixel;
+            uint8_t *s_g_base = s_r_base + s_plane_size;
+            uint8_t *s_b_base = s_g_base + s_plane_size;
+
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_RGB565:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *dst_ptr_row = (uint16_t *)GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->w + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                        }
+                    }
+                    return 0;
+                }
+                case IMAGE_FORMAT_RGB888:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->w + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[0] = r8;
+                            dst_ptr_row[1] = g8;
+                            dst_ptr_row[2] = b8;
+                            
+                            dst_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->w + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported R8G8B8 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_GRAYSCALE (1 BPP Source) ---
+        // ----------------------------------------------------------------------
+        if (src->format == IMAGE_FORMAT_GRAYSCALE)
+        {
+            LOG_E("Unsupported GRAYSCALE source to Dst %d in cut_to_new_format", dst_format);
+            return -1;
+        }
+
+        LOG_E("Unsupported format combination: Src %d to Dst %d", src->format, dst_format);
+
+        return -1;
+    }
+
+    int Image::cut_to_new_format(Image *dst, rectangle_t &r, image_format_t new_format, bool create)
+    {
+        return cut_to_new_format(this, dst, r, new_format, create);
+    }
+
+    Image * Image::cut_to_new_format(rectangle_t &r, image_format_t new_format)
+    {
+        Image *img = new Image();
+
+        if (0x00 != cut_to_new_format(this, img, r, new_format, true))
+        {
+            delete img;
+            return NULL;
+        }
+
+        return img;
+    }
+
+    int Image::cut_to_r8g8b8(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_R8G8B8, create);
+    }
+
+    Image * Image::cut_to_r8g8b8(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_R8G8B8);
+    }
+
+    int Image::cut_to_rgb565(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGB565, create);
+    }
+
+    Image * Image::cut_to_rgb565(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_RGB565);
+    }
+
+    int Image::cut_to_rgb888(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGB888, create);
+    }
+
+    Image * Image::cut_to_rgb888(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_RGB888);
+    }
+
+    int Image::cut_to_grayscale(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    Image * Image::cut_to_grayscale(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_GRAYSCALE);
+    }
+
     int Image::load_bmp(Image *dst, fs::FS &fs, const char *name)
     {
         fs::File file;
