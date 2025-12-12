@@ -20,9 +20,9 @@ function build(){
 
     if [ "$OS_IS_LINUX" == "1" ]; then
         args+=" -p $ARDUINO_K210_PATH/libraries"
+        args+=" -i $chunk_index -m $chunks_cnt"
         args+=" -prefs=runtime.tools.xpack-riscv-none-embed-gcc.path=${ARDUINO_K210_PATH}/tools/xpack-riscv-none-embed-gcc"
         args+=" -prefs=runtime.tools.kflash_py.path=${ARDUINO_K210_PATH}/tools/kflash_py"
-        args+=" -i $chunk_index -m $chunks_cnt"
         echo "Building sketch: $sketch with args: ${args}"
         ${BUILD_SKETCHES} "${args}"
     else
