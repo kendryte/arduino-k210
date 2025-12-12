@@ -34,7 +34,8 @@ function build(){
                 -prefs=runtime.tools.arduino-preprocessor.path=$ARDUINO_IDE_PATH/tools-builder/arduino-preprocessor/$preprocessor_version"
                 args+=" ${win_opts}"
             fi
-            ${BUILD_SKETCH} ${args}
+            echo "Building sketch: $sketch with args: ${args}"
+            ${BUILD_SKETCH} "${args}"
         done
     fi
 }
