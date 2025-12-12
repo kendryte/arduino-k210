@@ -1,3 +1,5 @@
+#include "rtthread.h"
+
 #define DBG_TAG "DVP"
 #define DBG_LVL DBG_WARNING
 #include "rtdbg.h"
@@ -121,10 +123,25 @@ static int _bus_dvp_irq(void *ctx)
     dvp_enable_burst();
     dvp_set_image_format(DVP_CFG_RGB_FORMAT);
     dvp_set_image_size(_imgWidth, _imgHeight);
-    dvp_set_output_enable(DVP_OUTPUT_DISPLAY, 1);
-    dvp_set_output_enable(DVP_OUTPUT_AI, 1);
-    dvp_set_display_addr(_buff.disply);
-    dvp_set_ai_addr(_buff.ai.r, _buff.ai.g, _buff.ai.b);
+
+    if(_buff.disply) {
+        dvp_set_display_addr(_buff.disply);
+        dvp_set_output_enable(DVP_OUTPUT_DISPLAY, 1);
+    } else {
+        dvp_set_output_enable(DVP_OUTPUT_DISPLAY, 0);
+
+        rt_kputs("DVP display buffer is NULL!\n");
+    }
+
+    if(_buff.ai.r && _buff.ai.g && _buff.ai.b) {
+        dvp_set_ai_addr(_buff.ai.r, _buff.ai.g, _buff.ai.b);
+        dvp_set_output_enable(DVP_OUTPUT_AI, 1);
+    } else {
+        dvp_set_output_enable(DVP_OUTPUT_AI, 0);
+
+        rt_kputs("DVP AI buffer is NULL!\n");
+    }
+
 	dvp_disable_auto();
 
     plic_set_priority(IRQN_DVP_INTERRUPT, 2);
@@ -173,10 +190,10 @@ static int _bus_dvp_irq(void *ctx)
     _imgWidth = 0;
     _imgHeight = 0;
 
-    if(_inner_buff_flag)
-    {
-        rt_free_align(_buff.disply);
-        rt_free_align(_buff.disply);
+    if(_inner_buff_flag) {
+        if(_buff.disply) {
+            rt_free_align(_buff.disply);
+        }
     }
     _inner_buff_flag = false;
     memset(&_buff, 0, sizeof(_buff));
@@ -186,7 +203,7 @@ static int _bus_dvp_irq(void *ctx)
     lock_unlock(&_lock);
 }
 
-/* static */ int BusDVP::capture(uint32_t timeout_ms)
+/* static */ int BusDVP::capture(uint32_t timeout_ms, bool convert_display_order)
 {
     uint64_t start = sysctl_get_time_us();
     uint64_t end = start + timeout_ms * 1000;
@@ -204,7 +221,9 @@ static int _bus_dvp_irq(void *ctx)
         }
     }
 
-    convert_display_buffer_order();
+    if(convert_display_order && _buff.disply) {
+        convert_display_buffer_order();
+    }
 
     lock_unlock(&_lock);
 

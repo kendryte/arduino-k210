@@ -146,7 +146,7 @@ public:
     virtual int         write_reg           (uint8_t reg_addr, uint8_t reg_data);
     virtual int         write_reg           (uint16_t reg_addr, uint16_t reg_data);
     virtual int         write_reg           (int reg_addr, int reg_data);
-    virtual int         snapshot            (uint32_t timeout_ms = 200);
+    virtual int         snapshot            (uint32_t timeout_ms = 200, bool convert_display_order = true);
 
     virtual int         width               (void);
     virtual int         height              (void);
