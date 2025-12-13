@@ -54,10 +54,72 @@ const uint32_t jpeg_expand[16] = {
 };
 #endif
 
-#define __CLZ(x) __builtin_clz(x) 
+#if (OMV_JPEG_CODEC_ENABLE == 0)
+#define RGB888_TO_YCBCR(r, g, b, Y0_PTR, CB_PTR, CR_PTR, INDEX)                \
+  do {                                                                         \
+    (Y0_PTR)[(INDEX)] =                                                        \
+        (int8_t)(((((r) * 38) + ((g) * 75) + ((b) * 15)) >> 7) ^ 0x80);        \
+    (CB_PTR)[(INDEX)] = (int8_t)((((b) * 64) - ((r) * 21) - ((g) * 43)) >> 7); \
+    (CR_PTR)[(INDEX)] = (int8_t)((((r) * 64) - ((g) * 54) - ((b) * 10)) >> 7); \
+  } while (0)
 
-static inline __attribute__((always_inline)) uint32_t __SSUB16(uint32_t op1, uint32_t op2)
-{
+#define TWO_RGB888_TO_YCBCR(r0, r1, g0, g1, b0, b1, Y0_PTR, CB_PTR, CR_PTR,    \
+                            INDEX)                                             \
+  do {                                                                         \
+    uint32_t r_pair = (r0) | ((r1) << 16);                                     \
+    uint32_t g_pair = (g0) | ((g1) << 16);                                     \
+    uint32_t b_pair = (b0) | ((b1) << 16);                                     \
+                                                                               \
+    int y_val = ((r_pair * 38) + (g_pair * 75) + (b_pair * 15)) >> 7;          \
+    int cb_val = __SSUB16(b_pair * 64, (r_pair * 21) + (g_pair * 43)) >> 7;    \
+    int cr_val = __SSUB16(r_pair * 64, (g_pair * 54) + (b_pair * 10)) >> 7;    \
+                                                                               \
+    y_val ^= 0x800080;                                                         \
+                                                                               \
+    Y0_PTR[INDEX] = (int8_t)(y_val & 0xFF);                                    \
+    Y0_PTR[(INDEX) + 1] = (int8_t)((y_val >> 16) & 0xFF);                      \
+    CB_PTR[INDEX] = (int8_t)(cb_val & 0xFF);                                   \
+    CB_PTR[(INDEX) + 1] = (int8_t)((cb_val >> 16) & 0xFF);                     \
+    CR_PTR[INDEX] = (int8_t)(cr_val & 0xFF);                                   \
+    CR_PTR[(INDEX) + 1] = (int8_t)((cr_val >> 16) & 0xFF);                     \
+  } while (0)
+#else
+#define RGB888_TO_YCBCR(r, g, b, Y0_PTR, CB_PTR, CR_PTR, INDEX)                \
+  do {                                                                         \
+    (Y0_PTR)[(INDEX)] = (int8_t)((((r) * 38) + ((g) * 75) + ((b) * 15)) >> 7); \
+    (CB_PTR)[(INDEX)] =                                                        \
+        (int8_t)(((((b) * 64) - ((r) * 21) - ((g) * 43)) >> 7) ^ 0x80);        \
+    (CR_PTR)[(INDEX)] =                                                        \
+        (int8_t)(((((r) * 64) - ((g) * 54) - ((b) * 10)) >> 7) ^ 0x80);        \
+  } while (0)
+
+#define TWO_RGB888_TO_YCBCR(r0, r1, g0, g1, b0, b1, Y0_PTR, CB_PTR, CR_PTR,    \
+                            INDEX)                                             \
+  do {                                                                         \
+    uint32_t r_pair = (r0) | ((r1) << 16);                                     \
+    uint32_t g_pair = (g0) | ((g1) << 16);                                     \
+    uint32_t b_pair = (b0) | ((b1) << 16);                                     \
+                                                                               \
+    int y_val = ((r_pair * 38) + (g_pair * 75) + (b_pair * 15)) >> 7;          \
+    int cb_val = __SSUB16(b_pair * 64, (r_pair * 21) + (g_pair * 43)) >> 7;    \
+    int cr_val = __SSUB16(r_pair * 64, (g_pair * 54) + (b_pair * 10)) >> 7;    \
+                                                                               \
+    cb_val ^= 0x800080;                                                        \
+    cr_val ^= 0x800080;                                                        \
+                                                                               \
+    Y0_PTR[INDEX] = (int8_t)(y_val & 0xFF);                                    \
+    Y0_PTR[(INDEX) + 1] = (int8_t)((y_val >> 16) & 0xFF);                      \
+    CB_PTR[INDEX] = (int8_t)(cb_val & 0xFF);                                   \
+    CB_PTR[(INDEX) + 1] = (int8_t)((cb_val >> 16) & 0xFF);                     \
+    CR_PTR[INDEX] = (int8_t)(cr_val & 0xFF);                                   \
+    CR_PTR[(INDEX) + 1] = (int8_t)((cr_val >> 16) & 0xFF);                     \
+  } while (0)
+#endif
+
+#define __CLZ(x) __builtin_clz(x)
+
+static inline __attribute__((always_inline)) uint32_t __SSUB16(uint32_t op1,
+                                                               uint32_t op2) {
   return ((op1 & 0xFFFF0000) - (op2 & 0xFFFF0000)) | ((op1 - op2) & 0xFFFF);
 }
 
@@ -190,27 +252,21 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
                     int b_pixels = ((pixels << 3) & 0xf800f8) | ((pixels >> 2) & 0x70007);
 
                     int y = ((r_pixels * 38) + (g_pixels * 75) + (b_pixels * 15)) >> 7;
-
                     #if (OMV_JPEG_CODEC_ENABLE == 0)
                     y ^= 0x800080;
                     #endif
-
                     Y0[index] = y, Y0[index + 1] = y >> 16;
 
                     int u = __SSUB16(b_pixels * 64, (r_pixels * 21) + (g_pixels * 43)) >> 7;
-
                     #if (OMV_JPEG_CODEC_ENABLE == 1)
                     u ^= 0x800080;
                     #endif
-
                     CB[index] = u, CB[index + 1] = u >> 16;
 
                     int v = __SSUB16(r_pixels * 64, (g_pixels * 54) + (b_pixels * 10)) >> 7;
-
                     #if (OMV_JPEG_CODEC_ENABLE == 1)
                     v ^= 0x800080;
                     #endif
-
                     CR[index] = v, CR[index + 1] = v >> 16;
                 }
 
@@ -220,29 +276,8 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
                     int g = COLOR_RGB565_TO_G8(pixel);
                     int b = COLOR_RGB565_TO_B8(pixel);
 
-                    int y0 = COLOR_RGB888_TO_Y(r, g, b);
-
-                    #if (OMV_JPEG_CODEC_ENABLE == 0)
-                    y0 ^= 0x80;
-                    #endif
-
-                    Y0[index] = y0;
-
-                    int cb = COLOR_RGB888_TO_U(r, g, b);
-
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cb ^= 0x80;
-                    #endif
-
-                    CB[index] = cb;
-
-                    int cr = COLOR_RGB888_TO_V(r, g, b);
-
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cr ^= 0x80;
-                    #endif
-
-                    CR[index++] = cr;
+                    RGB888_TO_YCBCR(r, g, b, Y0, CB, CR, index);
+                    index++;
                 }
 
                 index += JPEG_MCU_W - dx;
@@ -251,116 +286,85 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
         }
 
         case IMAGE_FORMAT_RGB888: {
-            // Check for partial MCU block
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
-                // partial MCU, fill with 0's to start
                 rt_memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
                 rt_memset(CB, 0, JPEG_444_GS_MCU_SIZE);
                 rt_memset(CR, 0, JPEG_444_GS_MCU_SIZE);
             }
 
-            // Loop over rows in the MCU
             for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
-                // Get the starting pointer for the current row's RGB888 data. 3 bytes per pixel.
                 uint8_t *rp_start = (uint8_t *) IMAGE_COMPUTE_RGB888_PIXEL_ROW_PTR(src, y) + (x_offset * 3);
 
-                // Loop over pixels in the row
-                for (int x = 0; x < dx; x++, index++) {
-                    // Read R, G, B components (3 bytes per pixel)
+                int x = 0;
+
+                for (; x <= dx - 2; x += 2, index += 2) {
+                    uint8_t r1 = rp_start[x * 3 + 0];
+                    uint8_t g1 = rp_start[x * 3 + 1];
+                    uint8_t b1 = rp_start[x * 3 + 2];
+
+                    uint8_t r2 = rp_start[x * 3 + 3];
+                    uint8_t g2 = rp_start[x * 3 + 4];
+                    uint8_t b2 = rp_start[x * 3 + 5];
+
+                    TWO_RGB888_TO_YCBCR(r1, r2, g1, g2, b1, b2, Y0, CB, CR, index);
+                }
+
+                if (x < dx) {
                     uint8_t r = rp_start[x * 3 + 0];
                     uint8_t g = rp_start[x * 3 + 1];
                     uint8_t b = rp_start[x * 3 + 2];
-
-                    // 1. Calculate Y (Luma): Y = (38R + 75G + 15B) >> 7
-                    int y_val = ((r * 38) + (g * 75) + (b * 15)) >> 7;
-
-                    // Apply offset: OpenMV's software JPEG subtracts 128 from Y
-                    #if (OMV_JPEG_CODEC_ENABLE == 0)
-                    y_val ^= 0x80;
-                    #endif
-                    Y0[index] = (int8_t) y_val;
-
-                    // 2. Calculate Cb (Chroma Blue): Cb = (64B - 21R - 43G) >> 7
-                    int cb_val = ((b * 64) - (r * 21) - (g * 43)) >> 7;
-                    // Apply offset: Hardware JPEG (K210) requires Cb/Cr centered at 0 (subtract 128)
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cb_val ^= 0x80;
-                    #endif
-                    CB[index] = (int8_t) cb_val;
-
-                    // 3. Calculate Cr (Chroma Red): Cr = (64R - 54G - 10B) >> 7
-                    int cr_val = ((r * 64) - (g * 54) - (b * 10)) >> 7;
-                    // Apply offset: Hardware JPEG (K210) requires Cb/Cr centered at 0 (subtract 128)
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cr_val ^= 0x80;
-                    #endif
-                    CR[index] = (int8_t) cr_val;
+                    RGB888_TO_YCBCR(r, g, b, Y0, CB, CR, index);
+                    index++;
                 }
-                
-                // Advance the destination buffer index to the start of the next MCU row
+
                 index += JPEG_MCU_W - dx;
             }
             break;
         }
-
         case IMAGE_FORMAT_RGBP888: {
-            // Check for partial MCU block
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
-                // partial MCU, fill with 0's to start
                 rt_memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
                 rt_memset(CB, 0, JPEG_444_GS_MCU_SIZE);
                 rt_memset(CR, 0, JPEG_444_GS_MCU_SIZE);
             }
 
-            // Calculate the size of a single color plane.
             int plane_size = src->w * src->h;
+            int src_w = src->w;
 
-            // Get the starting address of each plane.
             uint8_t *r_plane_start = (uint8_t *) src->data;
             uint8_t *g_plane_start = r_plane_start + plane_size;
             uint8_t *b_plane_start = g_plane_start + plane_size;
 
-            // Loop over rows in the MCU
             for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
-                // Calculate the starting pointer for the current row/x_offset in each plane.
-                uint8_t *r_ptr = r_plane_start + (src->w * y) + x_offset;
-                uint8_t *g_ptr = g_plane_start + (src->w * y) + x_offset;
-                uint8_t *b_ptr = b_plane_start + (src->w * y) + x_offset;
+                int x = 0;
 
-                // Loop over pixels in the row
-                for (int x = 0; x < dx; x++, index++) {
-                    // Read R, G, B components (1 byte per pixel in each plane)
+                uint8_t *r_ptr = r_plane_start + (src_w * y) + x_offset;
+                uint8_t *g_ptr = g_plane_start + (src_w * y) + x_offset;
+                uint8_t *b_ptr = b_plane_start + (src_w * y) + x_offset;
+
+                for (; x <= dx - 2; x += 2, index += 2) {
+                    uint8_t r1 = r_ptr[x + 0];
+                    uint8_t r2 = r_ptr[x + 1];
+
+                    uint8_t g1 = g_ptr[x + 0];
+                    uint8_t g2 = g_ptr[x + 1];
+
+                    uint8_t b1 = b_ptr[x + 0];
+                    uint8_t b2 = b_ptr[x + 1];
+
+                    TWO_RGB888_TO_YCBCR(r1, r2, g1, g2, b1, b2, Y0, CB, CR, index);
+                }
+
+                if (x < dx) {
                     uint8_t r = r_ptr[x];
                     uint8_t g = g_ptr[x];
                     uint8_t b = b_ptr[x];
 
-                    // 1. Calculate Y (Luma): Y = (38R + 75G + 15B) >> 7
-                    int y_val = ((r * 38) + (g * 75) + (b * 15)) >> 7;
-
-                    // Apply offset
-                    #if (OMV_JPEG_CODEC_ENABLE == 0)
-                    y_val ^= 0x80;
-                    #endif
-                    Y0[index] = (int8_t) y_val;
-
-                    // 2. Calculate Cb (Chroma Blue): Cb = (64B - 21R - 43G) >> 7
-                    int cb_val = ((b * 64) - (r * 21) - (g * 43)) >> 7;
-                    // Apply offset
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cb_val ^= 0x80;
-                    #endif
-                    CB[index] = (int8_t) cb_val;
-
-                    // 3. Calculate Cr (Chroma Red): Cr = (64R - 54G - 10B) >> 7
-                    int cr_val = ((r * 64) - (g * 54) - (b * 10)) >> 7;
-                    // Apply offset
-                    #if (OMV_JPEG_CODEC_ENABLE == 1)
-                    cr_val ^= 0x80;
-                    #endif
-                    CR[index] = (int8_t) cr_val;
+                    RGB888_TO_YCBCR(r, g, b, Y0, CB, CR, index);
+                    x++;
+                    index++;
                 }
 
-                // Advance the destination buffer index to the start of the next MCU row
                 index += JPEG_MCU_W - dx;
             }
             break;
