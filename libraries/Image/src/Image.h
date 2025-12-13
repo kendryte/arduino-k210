@@ -3,19 +3,10 @@
 #include <stdint.h>
 
 #include "FS.h"
+#include "image_cvt.h"
 
 namespace K210
 {
-
-    enum image_format_t : uint32_t
-    {
-        IMAGE_FORMAT_GRAYSCALE = 0, // bpp 1
-        IMAGE_FORMAT_RGB565,        // bpp 2
-        IMAGE_FORMAT_RGB888,        // bpp 3
-        IMAGE_FORMAT_R8G8B8,        // bpp 3
-        IMAGE_FORMAT_INVALID = 4,
-    };
-
     typedef struct rectangle
     {
         uint32_t x;
@@ -89,6 +80,13 @@ namespace K210
 
         static int save_bmp(Image *img, fs::FS &fs, const char *name);
         int save_bmp(fs::FS &fs, const char *name);
+
+        // JPEG save functions
+        static int save_jpeg(Image *img, fs::FS &fs, const char *name, int quality = 80);
+        int save_jpeg(fs::FS &fs, const char *name, int quality = 80);
+
+        static int compress_jpeg(Image *img, uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
+        int compress_jpeg(uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
 
         uint32_t w, h, bpp;
         image_format_t format;

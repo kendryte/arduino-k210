@@ -6,6 +6,15 @@
 extern "C" {
 #endif
 
+enum image_format_t
+{
+    IMAGE_FORMAT_GRAYSCALE = 0, // bpp 1
+    IMAGE_FORMAT_RGB565,        // bpp 2
+    IMAGE_FORMAT_RGB888,        // bpp 3
+    IMAGE_FORMAT_R8G8B8,        // bpp 3
+    IMAGE_FORMAT_INVALID = 4,
+};
+
 #define IM_MAX(a,b)     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
 #define IM_MIN(a,b)     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
 
@@ -102,6 +111,46 @@ static inline uint16_t yuv_to_rgb565(uint8_t y, int8_t u, int8_t v)
 
     return COLOR_R8_G8_B8_TO_RGB565(r, g, b);
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#define IM_LOG2_2(x)             (((x) & 0x2ULL) ? (2) :             1)                                // NO ({ ... }) !
+#define IM_LOG2_4(x)             (((x) & 0xCULL) ? (2 + IM_LOG2_2((x) >> 2)) :  IM_LOG2_2(x))          // NO ({ ... }) !
+#define IM_LOG2_8(x)             (((x) & 0xF0ULL) ? (4 + IM_LOG2_4((x) >> 4)) :  IM_LOG2_4(x))         // NO ({ ... }) !
+#define IM_LOG2_16(x)            (((x) & 0xFF00ULL) ? (8 + IM_LOG2_8((x) >> 8)) :  IM_LOG2_8(x))       // NO ({ ... }) !
+#define IM_LOG2_32(x)            (((x) & 0xFFFF0000ULL) ? (16 + IM_LOG2_16((x) >> 16)) : IM_LOG2_16(x)) // NO ({ ... }) !
+#define IM_LOG2(x)               (((x) & 0xFFFFFFFF00000000ULL) ? (32 + IM_LOG2_32((x) >> 32)) : IM_LOG2_32(x)) // NO ({ ... }) !
+
+#define UINT32_T_BITS            (sizeof(uint32_t) * 8)
+#define UINT32_T_MASK            (UINT32_T_BITS - 1)
+#define UINT32_T_SHIFT           IM_LOG2(UINT32_T_MASK)
+
+#define IMAGE_COMPUTE_BINARY_PIXEL_ROW_PTR(image, y)                                          \
+    ({                                                                                        \
+        __typeof__ (image) _image = (image);                                                  \
+        __typeof__ (y) _y = (y);                                                              \
+        ((uint32_t *) _image->data) + (((_image->w + UINT32_T_MASK) >> UINT32_T_SHIFT) * _y); \
+    })
+
+#define IMAGE_COMPUTE_GRAYSCALE_PIXEL_ROW_PTR(image, y) \
+    ({                                                  \
+        __typeof__ (image) _image = (image);            \
+        __typeof__ (y) _y = (y);                        \
+        ((uint8_t *) _image->data) + (_image->w * _y);  \
+    })
+
+#define IMAGE_COMPUTE_RGB565_PIXEL_ROW_PTR(image, y)    \
+    ({                                                  \
+        __typeof__ (image) _image = (image);            \
+        __typeof__ (y) _y = (y);                        \
+        ((uint16_t *) _image->data) + (_image->w * _y); \
+    })
+
+#define IMAGE_COMPUTE_YUV_PIXEL_ROW_PTR(image, y)       \
+    ({                                                  \
+        __typeof__ (image) _image = (image);            \
+        __typeof__ (y) _y = (y);                        \
+        ((uint16_t *) _image->data) + (_image->w * _y); \
+    })
 
 #ifdef __cplusplus
 }

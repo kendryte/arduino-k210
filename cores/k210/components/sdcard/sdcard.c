@@ -36,7 +36,7 @@ typedef enum card_type_e {
 #define CMD58                       58      /* Read OCR */
 #define CMD59                       59      /* CRC disable/enbale, should return 0x00 */
 
-#define CMD_WAIT_RESP_TIMEOUT       (0xffffU)
+#define CMD_WAIT_RESP_TIMEOUT       (5000U)
 #define WAIT_IDLE_TIMEOUT           (50U)
 
 /* Private variables ---------------------------------------------------------*/

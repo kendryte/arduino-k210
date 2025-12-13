@@ -39,6 +39,9 @@ extern "C" int main(int argc, char *argv[])
                         20);
     RT_ASSERT(thr != NULL);
 
+    // bind to CPU0
+    rt_thread_control(thr, RT_THREAD_CTRL_BIND_CPU, (void *)0);
+
 	rt_thread_startup(thr);
 
     return 0;

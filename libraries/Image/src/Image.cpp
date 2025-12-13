@@ -7,6 +7,7 @@
 
 #include "Image.h"
 #include "image_cvt.h"
+#include "jpege.h"
 
 // Configure the image reader.
 #define STBI_NO_JPEG
@@ -1592,6 +1593,147 @@ namespace K210
     int Image::save_bmp(fs::FS &fs, const char *name)
     {
         return save_bmp(this, fs, name);
+    }
+
+    int Image::save_jpeg(Image *img, fs::FS &fs, const char *name, int quality)
+    {
+        if ((NULL == img->pixel) ||
+            (0x00 == img->w) ||
+            (0x00 == img->h) ||
+            (0x00 == img->bpp))
+        {
+            LOG_E("Invalid image.");
+            return -1;
+        }
+
+        // Check if format is supported for JPEG compression
+        if ((IMAGE_FORMAT_GRAYSCALE != img->format) && (IMAGE_FORMAT_RGB565 != img->format))
+        {
+            LOG_E("JPEG compression only supports GRAYSCALE and RGB565 formats.");
+            return -1;
+        }
+
+        // Validate quality parameter
+        if (quality < 1 || quality > 100)
+        {
+            LOG_W("JPEG quality should be between 1-100, using default 80");
+            quality = 80;
+        }
+
+        // Create image_t structure for JPEG compression
+        image_t src_img;
+        src_img.w = img->w;
+        src_img.h = img->h;
+        src_img.data = img->pixel;
+        src_img.size = img->w * img->h * img->bpp;
+        src_img.pixfmt = img->format;
+
+        // Allocate buffer for JPEG compression
+        // Estimate JPEG size (typically 10-20% of original for quality 80)
+        size_t estimated_size = (src_img.size * 20) / 100;
+        if (estimated_size < 1024) estimated_size = 1024; // Minimum 1KB
+        
+        uint8_t *jpeg_buffer = (uint8_t *)rt_malloc(estimated_size);
+        if (NULL == jpeg_buffer)
+        {
+            LOG_E("Failed to allocate memory for JPEG buffer");
+            return -1;
+        }
+
+        size_t jpeg_size = estimated_size;
+        int result = jpeg_compress(&src_img, jpeg_buffer, &jpeg_size, quality, JPEG_SUBSAMPLING_AUTO);
+
+        if (result != 0)
+        {
+            LOG_E("JPEG compression failed with error code: %d", result);
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        // Write JPEG data to file
+        fs::File file = fs.open(name, FILE_WRITE);
+        if (!file)
+        {
+            LOG_E("Failed to open file %s for writing", name);
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        if (jpeg_size != file.write(jpeg_buffer, jpeg_size))
+        {
+            LOG_E("Failed to write JPEG data to file");
+            file.close();
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        file.close();
+        rt_free(jpeg_buffer);
+
+        LOG_I("JPEG saved successfully to %s, size: %d bytes", name, jpeg_size);
+        return 0;
+    }
+
+    int Image::save_jpeg(fs::FS &fs, const char *name, int quality)
+    {
+        return save_jpeg(this, fs, name, quality);
+    }
+
+    int Image::compress_jpeg(Image *img, uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality)
+    {
+        if ((NULL == img->pixel) ||
+            (0x00 == img->w) ||
+            (0x00 == img->h) ||
+            (0x00 == img->bpp) ||
+            (NULL == jpeg_buffer) ||
+            (NULL == jpeg_size))
+        {
+            LOG_E("Invalid parameters for JPEG compression");
+            return -1;
+        }
+
+        // Validate quality parameter
+        if (quality < 1 || quality > 100)
+        {
+            LOG_W("JPEG quality should be between 1-100, using default 80");
+            quality = 80;
+        }
+
+        // Create image_t structure for JPEG compression
+        image_t src_img;
+        src_img.w = img->w;
+        src_img.h = img->h;
+        src_img.data = img->pixel;
+        src_img.size = img->w * img->h * img->bpp;
+        src_img.pixfmt = img->format;
+
+        // Check if provided buffer has reasonable minimum size
+        if (buffer_capacity < 1024)
+        {
+            LOG_E("Provided buffer capacity (%d bytes) is too small, minimum 1024 bytes required", buffer_capacity);
+            return -1;
+        }
+ 
+        // Compress directly into user-provided buffer
+        size_t temp_jpeg_size = buffer_capacity;
+        int result = jpeg_compress(&src_img, jpeg_buffer, &temp_jpeg_size, quality, JPEG_SUBSAMPLING_AUTO);
+
+        if (result != 0)
+        {
+            LOG_E("JPEG compression failed with error code: %d", result);
+            return -1;
+        }
+
+        // Return actual compressed size
+        *jpeg_size = temp_jpeg_size;
+
+        LOG_D("JPEG compressed successfully, size: %d bytes", *jpeg_size);
+        return 0;
+    }
+
+    int Image::compress_jpeg(uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality)
+    {
+        return compress_jpeg(this, jpeg_buffer, buffer_capacity, jpeg_size, quality);
     }
 
 }

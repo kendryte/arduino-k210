@@ -78,7 +78,7 @@ int ST7789V::setFrameBuffer(K210::Image *img)
     if((_width != img->w) || \
         (_height != img->h) || \
         (NULL == img->pixel) || \
-        (K210::IMAGE_FORMAT_RGB565 != img->format))
+        (IMAGE_FORMAT_RGB565 != img->format))
     {
         LOG_E("%s failed", __func__);
         return -1;
@@ -337,7 +337,7 @@ void ST7789V::drawFastRGBBitmap(int16_t rx, int16_t ry, int16_t rw, int16_t rh, 
 
 void ST7789V::drawImage(const K210::Image *img, int16_t x, int16_t y)
 {
-    if (K210::IMAGE_FORMAT_RGB565 != img->format)
+    if (IMAGE_FORMAT_RGB565 != img->format)
     {
         return;
     }
