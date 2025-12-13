@@ -121,10 +121,10 @@ void setup()
         while(1) {}
     }
 
-    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_R8G8B8, buff.ai.r);
+    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGBP888, buff.ai.r);
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply);
 
-    img_128x128 = new Image(128, 128, IMAGE_FORMAT_R8G8B8, true);
+    img_128x128 = new Image(128, 128, IMAGE_FORMAT_RGBP888, true);
     if(NULL == img_128x128)
     {
         lcd.printf("new image 128x128 failed\n");
@@ -132,7 +132,7 @@ void setup()
         while(1) {}
     }
 
-    img_64x64 = new Image(64, 64, IMAGE_FORMAT_R8G8B8, true);
+    img_64x64 = new Image(64, 64, IMAGE_FORMAT_RGBP888, true);
     if(NULL == img_64x64)
     {
         lcd.printf("new image 64x64 failed\n");

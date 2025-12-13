@@ -27,7 +27,7 @@ namespace K210
         int load_kmodel(fs::FS &fs, const char *name);
         int load_kmodel(uint32_t offset);
 
-        int run_kmodel(uint8_t *r8g8b8, int w, int h, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
+        int run_kmodel(uint8_t *rgbp888, int w, int h, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
         int run_kmodel(Image *img, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
 
         int get_result(uint8_t **data, size_t *count, uint32_t startIndex = 0);
@@ -101,7 +101,7 @@ namespace K210
         int begin(float *anchor, int anchor_num, float threshold = 0.5, float nms_value = 0.3);
         void end();
 
-        int run(uint8_t *r8g8b8, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
+        int run(uint8_t *rgbp888, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
         int run(Image *img, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
 
     private:

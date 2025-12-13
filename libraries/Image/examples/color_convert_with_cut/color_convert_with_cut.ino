@@ -136,7 +136,7 @@ void loop()
         image_format_t format;
         const char* name;
     } tests[] = {
-        {IMAGE_FORMAT_R8G8B8, "r8g8b8"},
+        {IMAGE_FORMAT_RGBP888, "rgbp888"},
         {IMAGE_FORMAT_RGB565, "rgb565"},
         {IMAGE_FORMAT_RGB888, "rgb888"},
         {IMAGE_FORMAT_GRAYSCALE, "gray"}

@@ -63,7 +63,7 @@ void setup() // 初始化函数
         while(1) {} // 获取失败，进入死循环
     }
 
-    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_R8G8B8, buff.ai.r); // 创建Image对象
+    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGBP888, buff.ai.r); // 创建Image对象
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply); // 创建Image对象
 
     lcd.setFrameBuffer(img_display); // 设置显示屏帧缓存

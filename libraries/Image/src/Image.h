@@ -66,14 +66,14 @@ namespace K210
         int cut_to_rgb888(Image *dst, rectangle_t &r, bool create = true);
         Image * cut_to_rgb888(rectangle_t &r);
 
-        // convert image to r8g8b8 for ai inference
-        static int to_r8g8b8(Image *src, Image *dst, bool create);
-        int to_r8g8b8(Image *dst, bool create = true);
-        Image * to_r8g8b8(void);
+        // convert image to rgbp888 for ai inference
+        static int to_rgbp888(Image *src, Image *dst, bool create);
+        int to_rgbp888(Image *dst, bool create = true);
+        Image * to_rgbp888(void);
 
-        // cut and convert image to r8g8b8
-        int cut_to_r8g8b8(Image *dst, rectangle_t &r, bool create = true);
-        Image * cut_to_r8g8b8(rectangle_t &r);
+        // cut and convert image to rgbp888
+        int cut_to_rgbp888(Image *dst, rectangle_t &r, bool create = true);
+        Image * cut_to_rgbp888(rectangle_t &r);
 
         static int load_bmp(Image *dst, fs::FS &fs, const char *name);
         static Image * load_bmp(fs::FS &fs, const char *name);
@@ -110,7 +110,7 @@ namespace K210
                 bpp = 2;
                 break;
             case IMAGE_FORMAT_RGB888:
-            case IMAGE_FORMAT_R8G8B8:
+            case IMAGE_FORMAT_RGBP888:
                 bpp = 3;
                 break;
             default:

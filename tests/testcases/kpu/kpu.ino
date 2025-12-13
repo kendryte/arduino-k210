@@ -33,10 +33,10 @@ int run_kmodel(void)
 {
     obj_info_t info;
 
-    Image *face_r8g8b8 = NULL, face_rgb888 = Image(320, 256, IMAGE_FORMAT_RGB888, face_data);
+    Image *face_rgbp888 = NULL, face_rgb888 = Image(320, 256, IMAGE_FORMAT_RGB888, face_data);
 
-    face_r8g8b8 = face_rgb888.to_r8g8b8();
-    if (NULL == face_r8g8b8)
+    face_rgbp888 = face_rgb888.to_rgbp888();
+    if (NULL == face_rgbp888)
     {
         Serial.println("convert pic failed\n");
         return -1;
@@ -60,7 +60,7 @@ int run_kmodel(void)
         return -1;
     }
 
-    if (0x00 != yolo2.run(face_r8g8b8, &info))
+    if (0x00 != yolo2.run(face_rgbp888, &info))
     {
         Serial.println("yolo2 run failed\n");
         return -1;

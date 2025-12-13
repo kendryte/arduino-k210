@@ -203,7 +203,7 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             // copy r channel
             for (uint32_t i = 0; i < r.h; i++)
@@ -487,7 +487,7 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             uint16_t x1, x2, y1, y2;
             float w_scale, h_scale;
@@ -631,7 +631,7 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             uint8_t *grayscale = dst->pixel;
             uint8_t *end = grayscale + dst->w * dst->h * dst->bpp;
@@ -728,7 +728,7 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             uint16_t *rgb565 = (uint16_t *)dst->pixel;
             uint16_t *end = rgb565 + dst->w * dst->h;
@@ -828,7 +828,7 @@ namespace K210
             memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             uint8_t *rgb888 = dst->pixel;
             uint8_t *end = rgb888 + dst->w * dst->h * dst->bpp;
@@ -874,7 +874,7 @@ namespace K210
         return img;
     }
 
-    int Image::to_r8g8b8(Image *src, Image *dst, bool create)
+    int Image::to_rgbp888(Image *src, Image *dst, bool create)
     {
         if (NULL == src->pixel)
         {
@@ -882,7 +882,7 @@ namespace K210
             return -1;
         }
 
-        CREATE_DEST_IMAGE(IMAGE_FORMAT_R8G8B8)
+        CREATE_DEST_IMAGE(IMAGE_FORMAT_RGBP888)
 
         switch (src->format)
         {
@@ -944,9 +944,9 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
-            LOG_W("Convert r8g8b8 to r8g8b8, copy the image");
+            LOG_W("Convert rgbp888 to rgbp888, copy the image");
 
             memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
         }
@@ -962,15 +962,15 @@ namespace K210
         return 0;
     }
 
-    int Image::to_r8g8b8(Image *dst, bool create)
+    int Image::to_rgbp888(Image *dst, bool create)
     {
-        return to_r8g8b8(this, dst, create);
+        return to_rgbp888(this, dst, create);
     }
 
-    Image * Image::to_r8g8b8(void)
+    Image * Image::to_rgbp888(void)
     {
         Image *img = new Image();
-        if(0x00 != to_r8g8b8(this, img, true))
+        if(0x00 != to_rgbp888(this, img, true))
         {
             delete img;
             return NULL;
@@ -1055,7 +1055,7 @@ namespace K210
         // Handle direct cut (same format)
         if (src->format == dst_format)
         {
-            if (dst_format == IMAGE_FORMAT_R8G8B8)
+            if (dst_format == IMAGE_FORMAT_RGBP888)
             {
                 uint32_t s_plane_size = src->w * src->h;
                 uint32_t d_plane_size = dst_w * dst_h;
@@ -1097,7 +1097,7 @@ namespace K210
         {
             switch (dst_format)
             {
-                case IMAGE_FORMAT_R8G8B8: // Planar Destination
+                case IMAGE_FORMAT_RGBP888: // Planar Destination
                 {
                     uint32_t d_plane_size = dst_w * dst_h;
                     uint8_t *d_r = dst->pixel;
@@ -1201,7 +1201,7 @@ namespace K210
                     return 0;
                 }
 
-                case IMAGE_FORMAT_R8G8B8: // Planar Destination
+                case IMAGE_FORMAT_RGBP888: // Planar Destination
                 {
                     uint32_t d_plane_size = dst_w * dst_h;
                     uint8_t *d_r = dst->pixel;
@@ -1255,9 +1255,9 @@ namespace K210
         }
 
         // ----------------------------------------------------------------------
-        // --- Conversion from IMAGE_FORMAT_R8G8B8 (3 BPP, Planar Source) ---
+        // --- Conversion from IMAGE_FORMAT_RGBP888 (3 BPP, Planar Source) ---
         // ----------------------------------------------------------------------
-        if (src->format == IMAGE_FORMAT_R8G8B8)
+        if (src->format == IMAGE_FORMAT_RGBP888)
         {
             // Calculate source plane pointers once
             uint32_t s_plane_size = src->w * src->h;
@@ -1330,7 +1330,7 @@ namespace K210
                 }
                 default: 
                 {
-                    LOG_E("Unsupported R8G8B8 source to Dst %d", dst_format);
+                    LOG_E("Unsupported RGBP888 source to Dst %d", dst_format);
                     return -1;
                 }
             }
@@ -1368,14 +1368,14 @@ namespace K210
         return img;
     }
 
-    int Image::cut_to_r8g8b8(Image *dst, rectangle_t &r, bool create)
+    int Image::cut_to_rgbp888(Image *dst, rectangle_t &r, bool create)
     {
-        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_R8G8B8, create);
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGBP888, create);
     }
 
-    Image * Image::cut_to_r8g8b8(rectangle_t &r)
+    Image * Image::cut_to_rgbp888(rectangle_t &r)
     {
-        return cut_to_new_format(r, IMAGE_FORMAT_R8G8B8);
+        return cut_to_new_format(r, IMAGE_FORMAT_RGBP888);
     }
 
     int Image::cut_to_rgb565(Image *dst, rectangle_t &r, bool create)

@@ -303,7 +303,7 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
             break;
         }
 
-        case IMAGE_FORMAT_R8G8B8: {
+        case IMAGE_FORMAT_RGBP888: {
             // Check for partial MCU block
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
                 // partial MCU, fill with 0's to start
@@ -1092,7 +1092,7 @@ int jpeg_compress(image_t *src, uint8_t *dst_data, size_t *dst_size, int quality
     if ((IMAGE_FORMAT_GRAYSCALE != src->pixfmt) &&
         (IMAGE_FORMAT_RGB565 != src->pixfmt) &&
         (IMAGE_FORMAT_RGB888 != src->pixfmt) &&
-        (IMAGE_FORMAT_R8G8B8 != src->pixfmt))
+        (IMAGE_FORMAT_RGBP888 != src->pixfmt))
     {
       rt_kprintf("jpeg_compress: invalid source pixformat\n");
 

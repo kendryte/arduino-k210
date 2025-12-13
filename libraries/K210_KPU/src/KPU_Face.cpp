@@ -166,9 +166,9 @@ namespace K210
 
     int KPU_Face::apply_affine_transform(Image *src, Image *dst, float *TT)
     {
-        if ((IMAGE_FORMAT_R8G8B8 != src->format) || (IMAGE_FORMAT_R8G8B8 != dst->format))
+        if ((IMAGE_FORMAT_RGBP888 != src->format) || (IMAGE_FORMAT_RGBP888 != dst->format))
         {
-            LOG_E("only support r8g8b8");
+            LOG_E("only support rgbp888");
             return -1;
         }
 

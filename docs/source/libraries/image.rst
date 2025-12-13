@@ -43,7 +43,7 @@ Image
         IMAGE_FORMAT_GRAYSCALE = 0, // bpp 1
         IMAGE_FORMAT_RGB565,        // bpp 2
         IMAGE_FORMAT_RGB888,        // bpp 3
-        IMAGE_FORMAT_R8G8B8,        // bpp 3
+        IMAGE_FORMAT_RGBP888,        // bpp 3
         IMAGE_FORMAT_INVALID = 4,
     };
 
@@ -191,7 +191,7 @@ resize
 
 .. code-block:: arduino
 
-    img_128x128 = new Image(128, 128, IMAGE_FORMAT_R8G8B8, true);
+    img_128x128 = new Image(128, 128, IMAGE_FORMAT_RGBP888, true);
     img_cut->resize(img_128x128, 128, 128, false);
 
 
@@ -337,13 +337,13 @@ to_rgb888
     Image *img_rgb888;
     img_rgb888 = img_gray->to_rgb888();
 
-to_r8g8b8
+to_rgbp888
 ^^^^^^^^^^^^^^
 
 描述
 ======
 
-转换为 `r8g8b8` 格式，作为KPU输入图需要的格式
+转换为 `rgbp888` 格式，作为KPU输入图需要的格式
 
 语法
 ======
@@ -352,13 +352,13 @@ to_r8g8b8
 
 .. code-block:: arduino
 
-    int to_r8g8b8(Image *dst, bool create = true);
+    int to_rgbp888(Image *dst, bool create = true);
 
 - 2
 
 .. code-block:: arduino
 
-    Image * to_r8g8b8(void);
+    Image * to_rgbp888(void);
 
 参数
 ======
@@ -381,8 +381,8 @@ to_r8g8b8
 
 .. code-block:: arduino
 
-    Image *img_r8g8b8;
-    img_r8g8b8 = img_gray->to_r8g8b8();
+    Image *img_rgbp888;
+    img_rgbp888 = img_gray->to_rgbp888();
 
 load_bmp
 ^^^^^^^^^
@@ -489,9 +489,9 @@ save_bmp
 
 **颜色格式转换**
 
-以下是一个图像格式转换处理示例程序。它使用OV2640摄像头获取图像数据，并通过ST7789V液晶屏将不同格式的图像数据（RGB565、RGB888和R8G8B8）显示出来。
+以下是一个图像格式转换处理示例程序。它使用OV2640摄像头获取图像数据，并通过ST7789V液晶屏将不同格式的图像数据（RGB565、RGB888和RGBP888）显示出来。
 
-程序中使用了OV2640库、ST7789V库、FFat库和K210图像处理库来实现图像采集和显示，通过调用Image类的方法（to_grayscale，to_rgb565，to_rgb888，to_r8g8b8）实现不同格式间的转换。
+程序中使用了OV2640库、ST7789V库、FFat库和K210图像处理库来实现图像采集和显示，通过调用Image类的方法（to_grayscale，to_rgb565，to_rgb888，to_rgbp888）实现不同格式间的转换。
 
 需要注意的点包括：需要正确配置OV2640摄像头和ST7789V液晶屏的参数、需要正确挂载SD卡、需要正确获取图像缓冲区并创建Image对象、需要正确调用Image类的方法进行图像格式转换，并在合适的时候释放内存以避免内存泄漏。
 

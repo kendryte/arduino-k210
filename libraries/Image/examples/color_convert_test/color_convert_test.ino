@@ -60,7 +60,7 @@ void setup()
     }
 
     // 初始化图像指针
-    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_R8G8B8, buff.ai.r);
+    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGBP888, buff.ai.r);
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply);
 }
 
@@ -77,7 +77,7 @@ void loop()
         return;
     }
 
-    Image *img_gray, *img_rgb565, *img_rgb888, *img_r8g8b8;
+    Image *img_gray, *img_rgb565, *img_rgb888, *img_rgbp888;
 
     // 生成灰度图像
     img_gray = img_display->to_grayscale();
@@ -128,28 +128,28 @@ void loop()
     lcd.refresh();
     delay(500);
 
-    // 将灰度图像转换为R8G8B8图像
-    img_r8g8b8 = img_gray->to_r8g8b8();
-    if(!img_r8g8b8)
+    // 将灰度图像转换为RGBP888图像
+    img_rgbp888 = img_gray->to_rgbp888();
+    if(!img_rgbp888)
     {
         lcd.setCursor(0,0);
-        lcd.printf("to img_r8g8b8 failed\n");
+        lcd.printf("to img_rgbp888 failed\n");
         lcd.refresh();
 
-        Serial.printf("to img_r8g8b8 failed\n");
+        Serial.printf("to img_rgbp888 failed\n");
         return;
     }
 
-    // 将r8g8b8图像转换为RGB565图像
-    img_rgb565 = img_r8g8b8->to_rgb565();
+    // 将rgbp888图像转换为RGB565图像
+    img_rgb565 = img_rgbp888->to_rgb565();
     lcd.drawImage(img_rgb565);
 
     delete img_rgb565;
-    delete img_r8g8b8;
+    delete img_rgbp888;
 
     // 显示转换后的图像
     lcd.setCursor(0,0);
-    lcd.printf("gray to img_r8g8b8 to rgb565");
+    lcd.printf("gray to img_rgbp888 to rgb565");
     lcd.refresh();
     delay(500);
 
@@ -180,22 +180,22 @@ void loop()
     lcd.refresh();
     delay(500);
 
-    // 将rgb888图像转换为R8G8B8图像
-    img_r8g8b8 = img_rgb888->to_r8g8b8();
-    if(!img_r8g8b8)
+    // 将rgb888图像转换为RGBP888图像
+    img_rgbp888 = img_rgb888->to_rgbp888();
+    if(!img_rgbp888)
     {
         lcd.setCursor(0,0);
-        lcd.printf("to img_r8g8b8 failed\n");
+        lcd.printf("to img_rgbp888 failed\n");
         lcd.refresh();
 
-        Serial.printf("to img_r8g8b8 failed\n");
+        Serial.printf("to img_rgbp888 failed\n");
         return;
     }
 
-    // 将R8G8B8图像转换为RGB565图像
-    img_rgb565 = img_r8g8b8->to_rgb565();
+    // 将RGBP888图像转换为RGB565图像
+    img_rgb565 = img_rgbp888->to_rgb565();
     lcd.drawImage(img_rgb565);
 
     delete img_rgb565;
-    delete img_r8g8b8;
+    delete img_rgbp888;
 }
