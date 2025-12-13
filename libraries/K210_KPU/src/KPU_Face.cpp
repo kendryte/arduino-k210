@@ -166,36 +166,36 @@ namespace K210
 
     int KPU_Face::apply_affine_transform(Image *src, Image *dst, float *TT)
     {
-        if ((IMAGE_FORMAT_RGBP888 != src->format) || (IMAGE_FORMAT_RGBP888 != dst->format))
+        if ((IMAGE_FORMAT_RGBP888 != src->format()) || (IMAGE_FORMAT_RGBP888 != dst->format()))
         {
             LOG_E("only support rgbp888");
             return -1;
         }
 
         int i, j, k;
-        int step = src->w;
-        int color_step = src->w * src->h;
+        int step = src->width();
+        int color_step = src->width() * src->height();
 
-        uint8_t *src_buf = src->pixel;
-        uint8_t *dst_buf = dst->pixel;
+        uint8_t *src_buf = src->pixel();
+        uint8_t *dst_buf = dst->pixel();
 
         if (src_buf == NULL || dst_buf == NULL)
         {
             return -2;
         }
 
-        int dst_color_step = dst->w * dst->h;
-        int dst_step = dst->w;
+        int dst_color_step = dst->width() * dst->height();
+        int dst_step = dst->width();
 
-        memset(dst_buf, 0, dst->w * dst->h * dst->bpp);
+        memset(dst_buf, 0, dst->width() * dst->height() * dst->bpp());
 
         int x, y, pre_x, pre_y; 
         unsigned short color[2][2];
         float(*T)[3] = (float(*)[3])TT;
 
-        for (i = 0; i < dst->h; i++)
+        for (i = 0; i < dst->height(); i++)
         {
-            for (j = 0; j < dst->w; j++)
+            for (j = 0; j < dst->width(); j++)
             {
                 pre_x = (int)(T[0][0] * (j << 8) + T[0][1] * (i << 8) + T[0][2] * (1 << 8));
                 pre_y = (int)(T[1][0] * (j << 8) + T[1][1] * (i << 8) + T[1][2] * (1 << 8));
@@ -206,10 +206,10 @@ namespace K210
                 pre_x >>= 8;
                 pre_y >>= 8;
 
-                if (pre_x < 0 || pre_x > (src->w - 1) || pre_y < 0 || pre_y > (src->h - 1))
+                if (pre_x < 0 || pre_x > (src->width() - 1) || pre_y < 0 || pre_y > (src->height() - 1))
                     continue;
 
-                for (k = 0; k < src->bpp; k++)
+                for (k = 0; k < src->bpp(); k++)
                 {
                     color[0][0] = src_buf[pre_y * step + pre_x + k * color_step];
                     color[1][0] = src_buf[pre_y * step + (pre_x + 1) + k * color_step];

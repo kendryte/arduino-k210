@@ -85,16 +85,16 @@ void save_raw_image(Image *img, const char *filename)
         return;
     }
 
-    size_t size = img->w * img->h * img->bpp;
+    size_t size = img->size();
     
-    if (size != file.write(img->pixel, size))
+    if (size != file.write(img->pixel(), size))
     {
         Serial.printf("ERROR: Failed to write all data to %s.\n", filename);
     }
     else
     {
         Serial.printf("Saved raw data to %s (Size: %ld bytes, %dx%d, BPP: %d)\n", 
-                        filename, size, img->w, img->h, img->bpp);
+                        filename, size, img->width(), img->height(), img->bpp());
     }
     
     file.close();
@@ -117,12 +117,12 @@ void loop()
         Serial.printf("camera snapshot failed\n");
         return;
     }
-    Serial.printf("Source snapshot complete (%dx%d, RGB565)\n", img_sensor->w, img_sensor->h);
+    Serial.printf("Source snapshot complete (%dx%d, RGB565)\n", img_sensor->width(), img_sensor->height());
 
     // 2. Define the cut region (Center 320x240 region from 640x480 image)
     rectangle_t cut_rect = {
-        .x = (uint32_t)(img_sensor->w - 320) / 2,
-        .y = (uint32_t)(img_sensor->h - 240) / 2,
+        .x = (uint32_t)(img_sensor->width() - 320) / 2,
+        .y = (uint32_t)(img_sensor->height() - 240) / 2,
         .w = 320,
         .h = 240
     };
@@ -155,10 +155,10 @@ void loop()
         }
 
         // --- VALIDATION CHECK ---
-        if (img_temp->w == 0 || img_temp->h == 0 || img_temp->bpp == 0)
+        if (img_temp->width() == 0 || img_temp->height() == 0 || img_temp->bpp() == 0)
         {
             Serial.printf("CRITICAL ERROR: Returned Image object has ZERO dimensions or BPP (%dx%d, BPP: %d).\n", 
-                          img_temp->w, img_temp->h, img_temp->bpp);
+                          img_temp->width(), img_temp->height(), img_temp->bpp());
             delete img_temp;
             continue;
         }

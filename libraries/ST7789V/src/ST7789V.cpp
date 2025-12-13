@@ -75,16 +75,16 @@ void ST7789V::begin(uint32_t freq)
 
 int ST7789V::setFrameBuffer(K210::Image *img)
 {
-    if((_width != img->w) || \
-        (_height != img->h) || \
-        (NULL == img->pixel) || \
-        (IMAGE_FORMAT_RGB565 != img->format))
+    if((_width != img->width()) || \
+        (_height != img->height()) || \
+        (NULL == img->pixel()) || \
+        (IMAGE_FORMAT_RGB565 != img->format()))
     {
         LOG_E("%s failed", __func__);
         return -1;
     }
 
-    return setFrameBuffer((uint16_t *)img->pixel, static_cast<int16_t>(img->w), static_cast<int16_t>(img->h));
+    return setFrameBuffer((uint16_t *)img->pixel(), static_cast<int16_t>(img->width()), static_cast<int16_t>(img->height()));
 }
 
 int ST7789V::setFrameBuffer(uint16_t *buffer, int16_t w, int16_t h)
@@ -337,22 +337,22 @@ void ST7789V::drawFastRGBBitmap(int16_t rx, int16_t ry, int16_t rw, int16_t rh, 
 
 void ST7789V::drawImage(const K210::Image *img, int16_t x, int16_t y)
 {
-    if (IMAGE_FORMAT_RGB565 != img->format)
+    if (IMAGE_FORMAT_RGB565 != img->format())
     {
         return;
     }
 
-    if (((img->w + x) > _width) || ((img->h + y) > _height))
+    if (((img->width() + x) > _width) || ((img->height() + y) > _height))
     {
         return;
     }
 
-    if (NULL == img->pixel)
+    if (NULL == img->pixel())
     {
         return;
     }
 
-    drawFastRGBBitmap(x, y, img->w, img->h, (uint16_t *)img->pixel);
+    drawFastRGBBitmap(x, y, img->width(), img->height(), (uint16_t *)img->pixel());
 }
 
 void ST7789V::refresh(void)

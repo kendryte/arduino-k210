@@ -88,14 +88,24 @@ namespace K210
         static int compress_jpeg(Image *img, uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
         int compress_jpeg(uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
 
-        uint32_t w, h, bpp;
-        image_format_t format;
+        // Getter functions
+        uint32_t width() const { return mWidth; }
+        uint32_t height() const { return mHeight; }
+        uint32_t bpp() const { return mBpp; }
+        image_format_t format() const { return mFormat; }
+        uint8_t* data() const { return mPixel; }
+        uint8_t* pixel() const { return mPixel; }
 
-        uint8_t *pixel;
+        // Function to calculate image size
+        uint32_t size() const { return mWidth * mHeight * mBpp; }
 
     private:
-        bool user_buffer;
-        bool buffer_not_align;
+        uint32_t mWidth, mHeight, mBpp;
+        image_format_t mFormat;
+        uint8_t *mPixel;
+
+        bool mUserBuffer;
+        bool mBufferNotAlign;
 
         static int format_to_bpp(image_format_t f)
         {

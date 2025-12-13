@@ -304,13 +304,13 @@ namespace K210
 
     int KPU_Base::run_kmodel(Image *img, dmac_channel_number_t dam_ch)
     {
-        if(IMAGE_FORMAT_RGBP888 != img->format)
+        if(IMAGE_FORMAT_RGBP888 != img->format())
         {
             LOG_E("Invalid image format");
             return -1;
         }
 
-        return run_kmodel(img->pixel, img->w, img->h, dam_ch);
+        return run_kmodel(img->pixel(), img->width(), img->height(), dam_ch);
     }
 
     int KPU_Base::get_result(uint8_t **data, size_t *count, uint32_t startIndex)
@@ -419,13 +419,13 @@ namespace K210
 
     int KPU_Yolo2::run(Image *img, obj_info_t *info, dmac_channel_number_t dam_ch)
     {
-        if(IMAGE_FORMAT_RGBP888 != img->format)
+        if(IMAGE_FORMAT_RGBP888 != img->format())
         {
             LOG_E("Invalid image format");
             return -1;
         }
 
-        return run(img->pixel, img->w, img->h, info, dam_ch);
+        return run(img->pixel(), img->width(), img->height(), info, dam_ch);
     }
 
 }
