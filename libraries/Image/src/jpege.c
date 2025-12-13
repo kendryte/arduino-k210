@@ -105,6 +105,7 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
             break;
         }
 #endif
+
         case IMAGE_FORMAT_GRAYSCALE: {
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
                 // partial MCU, fill with 0's to start
@@ -170,6 +171,7 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
             }
             break;
         }
+
         case IMAGE_FORMAT_RGB565: {
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
                 // partial MCU, fill with 0's to start
@@ -247,6 +249,123 @@ void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
             }
             break;
         }
+
+        case IMAGE_FORMAT_RGB888: {
+            // Check for partial MCU block
+            if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
+                // partial MCU, fill with 0's to start
+                rt_memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
+                rt_memset(CB, 0, JPEG_444_GS_MCU_SIZE);
+                rt_memset(CR, 0, JPEG_444_GS_MCU_SIZE);
+            }
+
+            // Loop over rows in the MCU
+            for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
+                // Get the starting pointer for the current row's RGB888 data. 3 bytes per pixel.
+                uint8_t *rp_start = (uint8_t *) IMAGE_COMPUTE_RGB888_PIXEL_ROW_PTR(src, y) + (x_offset * 3);
+
+                // Loop over pixels in the row
+                for (int x = 0; x < dx; x++, index++) {
+                    // Read R, G, B components (3 bytes per pixel)
+                    uint8_t r = rp_start[x * 3 + 0];
+                    uint8_t g = rp_start[x * 3 + 1];
+                    uint8_t b = rp_start[x * 3 + 2];
+
+                    // 1. Calculate Y (Luma): Y = (38R + 75G + 15B) >> 7
+                    int y_val = ((r * 38) + (g * 75) + (b * 15)) >> 7;
+
+                    // Apply offset: OpenMV's software JPEG subtracts 128 from Y
+                    #if (OMV_JPEG_CODEC_ENABLE == 0)
+                    y_val ^= 0x80;
+                    #endif
+                    Y0[index] = (int8_t) y_val;
+
+                    // 2. Calculate Cb (Chroma Blue): Cb = (64B - 21R - 43G) >> 7
+                    int cb_val = ((b * 64) - (r * 21) - (g * 43)) >> 7;
+                    // Apply offset: Hardware JPEG (K210) requires Cb/Cr centered at 0 (subtract 128)
+                    #if (OMV_JPEG_CODEC_ENABLE == 1)
+                    cb_val ^= 0x80;
+                    #endif
+                    CB[index] = (int8_t) cb_val;
+
+                    // 3. Calculate Cr (Chroma Red): Cr = (64R - 54G - 10B) >> 7
+                    int cr_val = ((r * 64) - (g * 54) - (b * 10)) >> 7;
+                    // Apply offset: Hardware JPEG (K210) requires Cb/Cr centered at 0 (subtract 128)
+                    #if (OMV_JPEG_CODEC_ENABLE == 1)
+                    cr_val ^= 0x80;
+                    #endif
+                    CR[index] = (int8_t) cr_val;
+                }
+                
+                // Advance the destination buffer index to the start of the next MCU row
+                index += JPEG_MCU_W - dx;
+            }
+            break;
+        }
+
+        case IMAGE_FORMAT_R8G8B8: {
+            // Check for partial MCU block
+            if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
+                // partial MCU, fill with 0's to start
+                rt_memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
+                rt_memset(CB, 0, JPEG_444_GS_MCU_SIZE);
+                rt_memset(CR, 0, JPEG_444_GS_MCU_SIZE);
+            }
+
+            // Calculate the size of a single color plane.
+            int plane_size = src->w * src->h;
+
+            // Get the starting address of each plane.
+            uint8_t *r_plane_start = (uint8_t *) src->data;
+            uint8_t *g_plane_start = r_plane_start + plane_size;
+            uint8_t *b_plane_start = g_plane_start + plane_size;
+
+            // Loop over rows in the MCU
+            for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
+                // Calculate the starting pointer for the current row/x_offset in each plane.
+                uint8_t *r_ptr = r_plane_start + (src->w * y) + x_offset;
+                uint8_t *g_ptr = g_plane_start + (src->w * y) + x_offset;
+                uint8_t *b_ptr = b_plane_start + (src->w * y) + x_offset;
+
+                // Loop over pixels in the row
+                for (int x = 0; x < dx; x++, index++) {
+                    // Read R, G, B components (1 byte per pixel in each plane)
+                    uint8_t r = r_ptr[x];
+                    uint8_t g = g_ptr[x];
+                    uint8_t b = b_ptr[x];
+
+                    // 1. Calculate Y (Luma): Y = (38R + 75G + 15B) >> 7
+                    int y_val = ((r * 38) + (g * 75) + (b * 15)) >> 7;
+
+                    // Apply offset
+                    #if (OMV_JPEG_CODEC_ENABLE == 0)
+                    y_val ^= 0x80;
+                    #endif
+                    Y0[index] = (int8_t) y_val;
+
+                    // 2. Calculate Cb (Chroma Blue): Cb = (64B - 21R - 43G) >> 7
+                    int cb_val = ((b * 64) - (r * 21) - (g * 43)) >> 7;
+                    // Apply offset
+                    #if (OMV_JPEG_CODEC_ENABLE == 1)
+                    cb_val ^= 0x80;
+                    #endif
+                    CB[index] = (int8_t) cb_val;
+
+                    // 3. Calculate Cr (Chroma Red): Cr = (64R - 54G - 10B) >> 7
+                    int cr_val = ((r * 64) - (g * 54) - (b * 10)) >> 7;
+                    // Apply offset
+                    #if (OMV_JPEG_CODEC_ENABLE == 1)
+                    cr_val ^= 0x80;
+                    #endif
+                    CR[index] = (int8_t) cr_val;
+                }
+
+                // Advance the destination buffer index to the start of the next MCU row
+                index += JPEG_MCU_W - dx;
+            }
+            break;
+        }
+
 #if 0
         case PIXFORMAT_YUV_ANY: {
             if ((dx != JPEG_MCU_W) || (dy != JPEG_MCU_H)) {
@@ -970,10 +1089,14 @@ int jpeg_compress(image_t *src, uint8_t *dst_data, size_t *dst_size, int quality
         return -1;
     }
 
-    if((IMAGE_FORMAT_GRAYSCALE != src->pixfmt) && (IMAGE_FORMAT_RGB565 != src->pixfmt)) {
-       rt_kprintf("jpeg_compress: invalid source pixformat\n");
+    if ((IMAGE_FORMAT_GRAYSCALE != src->pixfmt) &&
+        (IMAGE_FORMAT_RGB565 != src->pixfmt) &&
+        (IMAGE_FORMAT_RGB888 != src->pixfmt) &&
+        (IMAGE_FORMAT_R8G8B8 != src->pixfmt))
+    {
+      rt_kprintf("jpeg_compress: invalid source pixformat\n");
 
-        return -1;
+      return -1;
     }
 
     // JPEG buffer

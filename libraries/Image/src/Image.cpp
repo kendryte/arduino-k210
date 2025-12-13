@@ -1552,7 +1552,7 @@ namespace K210
             return -1;
         }
 
-        LOG_I("save bmp width %d, height %d, bpp %d, pixel %p", img->w, img->h, img->bpp, img->pixel);
+        LOG_D("save bmp width %d, height %d, bpp %d, pixel %p", img->w, img->h, img->bpp, img->pixel);
 
         if(0x00 == stbi_write_bmp_to_func(stbi_write_func, (void *)&_buff, img->w, img->h, img->bpp, (void *)img->pixel))
         {
@@ -1562,7 +1562,7 @@ namespace K210
             return -1;
         }
 
-        LOG_I("Bmp size is %ld", _buff.offset);
+        LOG_D("Bmp size is %ld", _buff.offset);
 
         fs::File file = fs.open(name, FILE_WRITE);
         if (!file)
@@ -1585,7 +1585,7 @@ namespace K210
         file.close();
         rt_free_align(_buff.buffer);
 
-        LOG_I("write bmp success");
+        LOG_D("write bmp success");
 
         return 0;
     }
@@ -1603,13 +1603,6 @@ namespace K210
             (0x00 == img->bpp))
         {
             LOG_E("Invalid image.");
-            return -1;
-        }
-
-        // Check if format is supported for JPEG compression
-        if ((IMAGE_FORMAT_GRAYSCALE != img->format) && (IMAGE_FORMAT_RGB565 != img->format))
-        {
-            LOG_E("JPEG compression only supports GRAYSCALE and RGB565 formats.");
             return -1;
         }
 
@@ -1632,7 +1625,7 @@ namespace K210
         // Estimate JPEG size (typically 10-20% of original for quality 80)
         size_t estimated_size = (src_img.size * 20) / 100;
         if (estimated_size < 1024) estimated_size = 1024; // Minimum 1KB
-        
+
         uint8_t *jpeg_buffer = (uint8_t *)rt_malloc(estimated_size);
         if (NULL == jpeg_buffer)
         {
@@ -1670,7 +1663,8 @@ namespace K210
         file.close();
         rt_free(jpeg_buffer);
 
-        LOG_I("JPEG saved successfully to %s, size: %d bytes", name, jpeg_size);
+        LOG_D("JPEG saved successfully to %s, size: %d bytes", name, jpeg_size);
+
         return 0;
     }
 

@@ -145,6 +145,13 @@ static inline uint16_t yuv_to_rgb565(uint8_t y, int8_t u, int8_t v)
         ((uint16_t *) _image->data) + (_image->w * _y); \
     })
 
+#define IMAGE_COMPUTE_RGB888_PIXEL_ROW_PTR(image, y)                           \
+  ({                                                                           \
+    __typeof__(image) _image = (image);                                        \
+    __typeof__(y) _y = (y);                                                    \
+    ((uint8_t *)_image->data) + (_image->w * _y * 3);                          \
+  })
+
 #define IMAGE_COMPUTE_YUV_PIXEL_ROW_PTR(image, y)       \
     ({                                                  \
         __typeof__ (image) _image = (image);            \
