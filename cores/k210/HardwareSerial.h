@@ -30,6 +30,8 @@
 class HardwareSerial : public Stream
 {
   public:
+    typedef void (*OnDataRecvCallback)(HardwareSerial* serial);
+
     HardwareSerial(int uartNum);
     ~HardwareSerial();
 
@@ -55,15 +57,22 @@ class HardwareSerial : public Stream
 
     operator bool() const;
 
+    void onReceive(OnDataRecvCallback callback);
+
   protected:
     int _uartNum;
     hal_uart_t *_uart;
     size_t _bufferSize;
-
     int8_t _rxPin, _txPin;
+
+    OnDataRecvCallback _onRecvCallback;
+
+    static void onDateRecvCallBack(void* user_data);
 };
 
 extern HardwareSerial Serial;
+extern HardwareSerial Serial1;
+extern HardwareSerial Serial2;
 
 // XXX: Are we keeping the serialEvent API?
 extern void serialEventRun(void) __attribute__((weak));

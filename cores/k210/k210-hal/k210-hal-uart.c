@@ -218,6 +218,10 @@ struct uart_struct_t {
 
     struct rt_serial_device     serial;
     rt_device_t                 dev;
+
+    struct rt_device_notify     dev_rx_notify;
+    volatile uart_on_data_recv  user_rx_notify;
+    volatile  void *            user_rx_notify_data;
 };
 
 static hal_uart_t _uart_bus_array[UART_DEVICE_MAX] = {
@@ -337,9 +341,12 @@ hal_uart_t* hal_uart_begin(uint8_t uartNum, uint32_t baudrate, uint32_t config, 
         _config.baud_rate = baudrate;
 
         err = rt_device_open(hal_uart->dev, RT_DEVICE_OFLAG_RDWR | RT_DEVICE_FLAG_INT_RX);
-        err += rt_device_control(hal_uart->dev, RT_DEVICE_CTRL_CONFIG, &_config);
-
         RT_ASSERT(err == RT_EOK);
+
+        err = rt_device_control(hal_uart->dev, RT_DEVICE_CTRL_CONFIG, &_config);
+        RT_ASSERT(err == RT_EOK);
+
+        hal_uart_on_data_recv(hal_uart, NULL, NULL);
     }
 
     return hal_uart;
@@ -354,6 +361,8 @@ void hal_uart_end(hal_uart_t* uart)
     if(uart->dev) {
         rt_err_t err = 0;
 
+        hal_uart_on_data_recv(uart, NULL, NULL);
+
         err = rt_device_close(uart->dev);
         RT_ASSERT(err == RT_EOK);
 
@@ -365,8 +374,7 @@ void hal_uart_end(hal_uart_t* uart)
 
 int hal_uart_available(hal_uart_t *uart)
 {
-    if (uart->dev == NULL)
-    {
+    if ((NULL == uart) || (uart->dev == NULL)) {
         return 0;
     }
 
@@ -391,7 +399,7 @@ int hal_uart_available(hal_uart_t *uart)
 
 int hal_uart_read_one(hal_uart_t* uart)
 {
-    if(uart->dev == NULL) {
+    if ((NULL == uart) || (uart->dev == NULL)) {
         return -1;
     }
 
@@ -404,16 +412,16 @@ int hal_uart_read_one(hal_uart_t* uart)
 
 size_t hal_uart_read_to_buffer(hal_uart_t* uart, uint8_t *buffer, size_t size)
 {
-    if((uart->dev == NULL) || (NULL == buffer) || (0x0 == size)) {
+    if((NULL == uart) || (uart->dev == NULL) || (NULL == buffer) || (0x0 == size)) {
         return 0;
     }
 
-    return rt_device_read(uart->dev, 0,buffer, size);
+    return rt_device_read(uart->dev, 0, buffer, size);
 }
 
 size_t hal_uart_write_one(hal_uart_t* uart, uint8_t c)
 {
-    if(uart->dev == NULL) {
+    if ((NULL == uart) || (uart->dev == NULL)) {
         return 0;
     }
 
@@ -423,7 +431,7 @@ size_t hal_uart_write_one(hal_uart_t* uart, uint8_t c)
 
 size_t hal_uart_write_from_buffer(hal_uart_t* uart, const uint8_t *buffer, size_t size)
 {
-    if((NULL == uart->dev) || (NULL == buffer) || (0x0 == size)) {
+    if((NULL == uart) || (NULL == uart->dev) || (NULL == buffer) || (0x0 == size)) {
         return 0;
     }
 
@@ -432,9 +440,63 @@ size_t hal_uart_write_from_buffer(hal_uart_t* uart, const uint8_t *buffer, size_
 
 bool hal_uart_is_opened(hal_uart_t* uart)
 {
-    if(NULL == uart->dev) {
+    if ((NULL == uart) || (uart->dev == NULL)) {
         return false;
     }
 
     return (uart->dev->open_flag & RT_DEVICE_OFLAG_OPEN) ? true : false;
+}
+
+static void hal_uart_rx_notify(rt_device_t dev)
+{
+    if(!dev) {
+        LOG_D("hal_uart_rx_notify: dev is NULL");
+        return;
+    }
+
+    struct rt_serial_device *serial = rt_container_of(dev, struct rt_serial_device, parent);
+    struct uart_struct_t *uart = rt_container_of(serial, struct uart_struct_t, serial);
+
+    if(!uart) {
+        LOG_D("hal_uart_rx_notify: uart is NULL");
+        return;
+    }
+
+    LOG_D("hal_uart_rx_notify: dev=%p, uart=%p, user_rx_notify=%p, user_data=%p\n", 
+          dev, uart, uart->user_rx_notify, uart->user_rx_notify_data);
+
+    if(uart->user_rx_notify) {
+        uart->user_rx_notify(uart->user_rx_notify_data);
+    }
+}
+
+bool hal_uart_on_data_recv(hal_uart_t* uart, uart_on_data_recv cb, void* user_data)
+{
+    rt_err_t err = 0;
+
+    LOG_D("hal_uart_on_data_recv: uart=%p, dev=%p, cb=%p, user_data=%p\n", uart, uart->dev, cb, user_data);
+
+    if ((NULL == uart) || (uart->dev == NULL)) {
+        LOG_W("hal_uart_on_data_recv: uart or dev is NULL");
+        return false;
+    }
+
+    if (cb && user_data) {
+        uart->user_rx_notify = cb;
+        uart->user_rx_notify_data = user_data;
+
+        uart->dev_rx_notify.notify = hal_uart_rx_notify;
+        uart->dev_rx_notify.dev = uart->dev;
+        err = rt_device_control(uart->dev, RT_DEVICE_CTRL_NOTIFY_SET, &uart->dev_rx_notify);
+    } else {
+        uart->user_rx_notify = NULL;
+        uart->user_rx_notify_data = NULL;
+
+        uart->dev_rx_notify.notify = NULL;
+        uart->dev_rx_notify.dev = NULL;
+
+        err = rt_device_control(uart->dev, RT_DEVICE_CTRL_NOTIFY_SET, &uart->dev_rx_notify);
+    }
+
+    return (RT_EOK == err) ? true : false;
 }

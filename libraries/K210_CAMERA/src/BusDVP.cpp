@@ -219,6 +219,7 @@ static int _bus_dvp_irq(void *ctx)
             lock_unlock(&_lock);
             return -1;
         }
+        rt_thread_mdelay(1);
     }
 
     if(convert_display_order && _buff.disply) {
