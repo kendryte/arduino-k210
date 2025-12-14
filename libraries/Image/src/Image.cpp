@@ -1409,6 +1409,974 @@ namespace K210
         return cut_to_new_format(r, IMAGE_FORMAT_GRAYSCALE);
     }
 
+    int Image::resize_to_new_format(Image *src, Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create)
+    {
+        if (NULL == src->mPixel)
+        {
+            LOG_E("Origin image no pixels");
+            return -1;
+        }
+
+        // --- Allocation and initialization block ---
+        if (false == create)
+        {
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("dst image no pixel buffer");
+                return -1;
+            }
+            if ((width != dst->mWidth) ||
+                (height != dst->mHeight) ||
+                (format_to_bpp(new_format) != dst->mBpp) ||
+                (new_format != dst->mFormat))
+            {
+                LOG_E("dst image format or size mismatch in non-create mode.");
+                return -1;
+            }
+        }
+        else // create == true
+        {
+            // 1. Set new properties based on resize dimensions and new format
+            dst->mWidth = width;
+            dst->mHeight = height;
+            dst->mBpp = format_to_bpp(new_format);
+            dst->mFormat = new_format;
+            dst->mUserBuffer = false; 
+
+            // 2. Free old buffer if present and not user-provided
+            if (dst->mPixel && !dst->mUserBuffer)
+            {
+                LOG_W("free old pixel buffer %p", dst->mPixel);
+                rt_free_align(dst->mPixel);
+                dst->mPixel = NULL;
+            }
+
+            // 3. Allocate new buffer
+            uint32_t size = width * height * dst->mBpp;
+            dst->mPixel = (uint8_t *)rt_malloc_align(size, 8);
+
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("Malloc failed for dst buffer");
+                return -1;
+            }
+        }
+        // --- End of Allocation block ---
+
+        if (src->mFormat == new_format)
+        {
+            return resize(src, dst, width, height, false);
+        }
+
+        float sx = (float)src->mWidth / width;
+        float sy = (float)src->mHeight / height;
+
+        // Handle different source formats
+        switch (src->mFormat)
+        {
+            case IMAGE_FORMAT_GRAYSCALE:
+            {
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                dst_ptr[y * width + x] = yuv_to_rgb565(gray, 0, 0);
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                uint8_t r, g, b;
+                                yuv_to_rgb888(gray, 0, 0, &r, &g, &b);
+
+                                uint32_t idx = (y * width + x) * 3;
+                                dst_ptr[idx] = r;
+                                dst_ptr[idx + 1] = g;
+                                dst_ptr[idx + 2] = b;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                uint8_t r, g, b;
+                                yuv_to_rgb888(gray, 0, 0, &r, &g, &b);
+
+                                uint32_t idx = y * width + x;
+                                dst_r[idx] = r;
+                                dst_g[idx] = g;
+                                dst_b[idx] = b;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    default:
+                        LOG_E("Unsupported conversion from GRAYSCALE to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+            
+            case IMAGE_FORMAT_RGB565:
+            {
+                uint16_t *src_ptr = (uint16_t *)src->mPixel;
+                
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation for each color component
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to grayscale and interpolate
+                                float g00 = COLOR_RGB565_TO_GRAYSCALE(p00);
+                                float g01 = COLOR_RGB565_TO_GRAYSCALE(p01);
+                                float g10 = COLOR_RGB565_TO_GRAYSCALE(p10);
+                                float g11 = COLOR_RGB565_TO_GRAYSCALE(p11);
+                                
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to RGB888 and interpolate each channel
+                                float r00 = COLOR_RGB565_TO_R8(p00);
+                                float g00 = COLOR_RGB565_TO_G8(p00);
+                                float b00 = COLOR_RGB565_TO_B8(p00);
+                                
+                                float r01 = COLOR_RGB565_TO_R8(p01);
+                                float g01 = COLOR_RGB565_TO_G8(p01);
+                                float b01 = COLOR_RGB565_TO_B8(p01);
+                                
+                                float r10 = COLOR_RGB565_TO_R8(p10);
+                                float g10 = COLOR_RGB565_TO_G8(p10);
+                                float b10 = COLOR_RGB565_TO_B8(p10);
+                                
+                                float r11 = COLOR_RGB565_TO_R8(p11);
+                                float g11 = COLOR_RGB565_TO_G8(p11);
+                                float b11 = COLOR_RGB565_TO_B8(p11);
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t idx = (y * width + x) * 3;
+                                dst_ptr[idx] = (uint8_t)r_interp;
+                                dst_ptr[idx + 1] = (uint8_t)g_interp;
+                                dst_ptr[idx + 2] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to RGB components and interpolate
+                                float r00 = COLOR_RGB565_TO_R8(p00);
+                                float g00 = COLOR_RGB565_TO_G8(p00);
+                                float b00 = COLOR_RGB565_TO_B8(p00);
+                                
+                                float r01 = COLOR_RGB565_TO_R8(p01);
+                                float g01 = COLOR_RGB565_TO_G8(p01);
+                                float b01 = COLOR_RGB565_TO_B8(p01);
+                                
+                                float r10 = COLOR_RGB565_TO_R8(p10);
+                                float g10 = COLOR_RGB565_TO_G8(p10);
+                                float b10 = COLOR_RGB565_TO_B8(p10);
+                                
+                                float r11 = COLOR_RGB565_TO_R8(p11);
+                                float g11 = COLOR_RGB565_TO_G8(p11);
+                                float b11 = COLOR_RGB565_TO_B8(p11);
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t idx = y * width + x;
+                                dst_r[idx] = (uint8_t)r_interp;
+                                dst_g[idx] = (uint8_t)g_interp;
+                                dst_b[idx] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGB565 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+
+            case IMAGE_FORMAT_RGB888:
+            {
+                uint8_t *src_ptr = src->mPixel;
+
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+
+                                // Convert each pixel to grayscale and interpolate
+                                float g00 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx00], src_ptr[idx00 + 1], src_ptr[idx00 + 2]);
+                                float g01 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx01], src_ptr[idx01 + 1], src_ptr[idx01 + 2]);
+                                float g10 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx10], src_ptr[idx10 + 1], src_ptr[idx10 + 2]);
+                                float g11 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx11], src_ptr[idx11 + 1], src_ptr[idx11 + 2]);
+
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+
+                                // Interpolate each channel separately
+                                float r00 = src_ptr[idx00];
+                                float g00 = src_ptr[idx00 + 1];
+                                float b00 = src_ptr[idx00 + 2];
+
+                                float r01 = src_ptr[idx01];
+                                float g01 = src_ptr[idx01 + 1];
+                                float b01 = src_ptr[idx01 + 2];
+
+                                float r10 = src_ptr[idx10];
+                                float g10 = src_ptr[idx10 + 1];
+                                float b10 = src_ptr[idx10 + 2];
+
+                                float r11 = src_ptr[idx11];
+                                float g11 = src_ptr[idx11 + 1];
+                                float b11 = src_ptr[idx11 + 2];
+
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+
+                                // Convert to RGB565
+                                uint8_t r8 = (uint8_t)r_interp;
+                                uint8_t g8 = (uint8_t)g_interp;
+                                uint8_t b8 = (uint8_t)b_interp;
+
+                                dst_ptr[y * width + x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_ptr[idx00];
+                                float g00 = src_ptr[idx00 + 1];
+                                float b00 = src_ptr[idx00 + 2];
+                                
+                                float r01 = src_ptr[idx01];
+                                float g01 = src_ptr[idx01 + 1];
+                                float b01 = src_ptr[idx01 + 2];
+                                
+                                float r10 = src_ptr[idx10];
+                                float g10 = src_ptr[idx10 + 1];
+                                float b10 = src_ptr[idx10 + 2];
+                                
+                                float r11 = src_ptr[idx11];
+                                float g11 = src_ptr[idx11 + 1];
+                                float b11 = src_ptr[idx11 + 2];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t dst_idx = y * width + x;
+                                dst_r[dst_idx] = (uint8_t)r_interp;
+                                dst_g[dst_idx] = (uint8_t)g_interp;
+                                dst_b[dst_idx] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGB888 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+
+            case IMAGE_FORMAT_RGBP888:
+            {
+                // Calculate source plane pointers
+                uint32_t src_plane_size = src->mWidth * src->mHeight;
+                uint8_t *src_r = src->mPixel;
+                uint8_t *src_g = src_r + src_plane_size;
+                uint8_t *src_b = src_g + src_plane_size;
+                
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Convert each pixel to grayscale and interpolate
+                                float g00 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx00], src_g[idx00], src_b[idx00]);
+                                float g01 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx01], src_g[idx01], src_b[idx01]);
+                                float g10 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx10], src_g[idx10], src_b[idx10]);
+                                float g11 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx11], src_g[idx11], src_b[idx11]);
+                                
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_r[idx00];
+                                float g00 = src_g[idx00];
+                                float b00 = src_b[idx00];
+                                
+                                float r01 = src_r[idx01];
+                                float g01 = src_g[idx01];
+                                float b01 = src_b[idx01];
+                                
+                                float r10 = src_r[idx10];
+                                float g10 = src_g[idx10];
+                                float b10 = src_b[idx10];
+                                
+                                float r11 = src_r[idx11];
+                                float g11 = src_g[idx11];
+                                float b11 = src_b[idx11];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                // Convert to RGB565
+                                uint8_t r8 = (uint8_t)r_interp;
+                                uint8_t g8 = (uint8_t)g_interp;
+                                uint8_t b8 = (uint8_t)b_interp;
+                                
+                                dst_ptr[y * width + x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_r[idx00];
+                                float g00 = src_g[idx00];
+                                float b00 = src_b[idx00];
+                                
+                                float r01 = src_r[idx01];
+                                float g01 = src_g[idx01];
+                                float b01 = src_b[idx01];
+                                
+                                float r10 = src_r[idx10];
+                                float g10 = src_g[idx10];
+                                float b10 = src_b[idx10];
+                                
+                                float r11 = src_r[idx11];
+                                float g11 = src_g[idx11];
+                                float b11 = src_b[idx11];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t dst_idx = (y * width + x) * 3;
+                                dst_ptr[dst_idx] = (uint8_t)r_interp;
+                                dst_ptr[dst_idx + 1] = (uint8_t)g_interp;
+                                dst_ptr[dst_idx + 2] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGBP888 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+            default:
+                LOG_E("Unsupported source format %d for resize_to_new_format", src->mFormat);
+                return -1;
+        }
+        
+        return 0;
+    }
+
+    int Image::resize_to_new_format(Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, new_format, create);
+    }
+
+    Image * Image::resize_to_new_format(uint32_t width, uint32_t height, image_format_t new_format)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, new_format, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_grayscale(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    int Image::resize_to_grayscale(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    Image * Image::resize_to_grayscale(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_GRAYSCALE, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgb565(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGB565, create);
+    }
+
+    int Image::resize_to_rgb565(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGB565, create);
+    }
+
+    Image * Image::resize_to_rgb565(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGB565, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgb888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGB888, create);
+    }
+
+    int Image::resize_to_rgb888(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGB888, create);
+    }
+
+    Image * Image::resize_to_rgb888(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGB888, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgbp888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGBP888, create);
+    }
+
+    int Image::resize_to_rgbp888(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGBP888, create);
+    }
+
+    Image * Image::resize_to_rgbp888(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGBP888, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
     int Image::load_bmp(Image *dst, fs::FS &fs, const char *name)
     {
         fs::File file;

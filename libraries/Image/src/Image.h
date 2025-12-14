@@ -39,6 +39,11 @@ namespace K210
         int resize(Image *dst, uint32_t width, uint32_t height, bool create = true);
         Image * resize(uint32_t width, uint32_t height);
 
+        // resize and convert image to new format
+        static int resize_to_new_format(Image *src, Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create);
+        int resize_to_new_format(Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create = true);
+        Image * resize_to_new_format(uint32_t width, uint32_t height, image_format_t new_format);
+
         // convert image to grayscale
         static int to_grayscale(Image *src, Image *dst, bool create);
         int to_grayscale(Image *dst, bool create = true);
@@ -47,6 +52,11 @@ namespace K210
         // cut and convert image to grayscale
         int cut_to_grayscale(Image *dst, rectangle_t &r, bool create = true);
         Image * cut_to_grayscale(rectangle_t &r);
+
+        // resize and convert image to grayscale
+        static int resize_to_grayscale(Image *src, Image *dst, uint32_t width, uint32_t height, bool create);
+        int resize_to_grayscale(Image *dst, uint32_t width, uint32_t height, bool create = true);
+        Image * resize_to_grayscale(uint32_t width, uint32_t height);
 
         // convert image to rgb565
         static int to_rgb565(Image *src, Image *dst, bool create);
@@ -57,6 +67,11 @@ namespace K210
         int cut_to_rgb565(Image *dst, rectangle_t &r, bool create = true);
         Image * cut_to_rgb565(rectangle_t &r);
 
+        // resize and convert image to rgb565
+        static int resize_to_rgb565(Image *src, Image *dst, uint32_t width, uint32_t height, bool create);
+        int resize_to_rgb565(Image *dst, uint32_t width, uint32_t height, bool create = true);
+        Image * resize_to_rgb565(uint32_t width, uint32_t height);
+
         // convert image to rgb888
         static int to_rgb888(Image *src, Image *dst, bool create);
         int to_rgb888(Image *dst, bool create = true);
@@ -66,6 +81,11 @@ namespace K210
         int cut_to_rgb888(Image *dst, rectangle_t &r, bool create = true);
         Image * cut_to_rgb888(rectangle_t &r);
 
+        // resize and convert image to rgb888
+        static int resize_to_rgb888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create);
+        int resize_to_rgb888(Image *dst, uint32_t width, uint32_t height, bool create = true);
+        Image * resize_to_rgb888(uint32_t width, uint32_t height);
+
         // convert image to rgbp888 for ai inference
         static int to_rgbp888(Image *src, Image *dst, bool create);
         int to_rgbp888(Image *dst, bool create = true);
@@ -74,6 +94,11 @@ namespace K210
         // cut and convert image to rgbp888
         int cut_to_rgbp888(Image *dst, rectangle_t &r, bool create = true);
         Image * cut_to_rgbp888(rectangle_t &r);
+
+        // resize and convert image to rgbp888
+        static int resize_to_rgbp888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create);
+        int resize_to_rgbp888(Image *dst, uint32_t width, uint32_t height, bool create = true);
+        Image * resize_to_rgbp888(uint32_t width, uint32_t height);
 
         static int load_bmp(Image *dst, fs::FS &fs, const char *name);
         static Image * load_bmp(fs::FS &fs, const char *name);
