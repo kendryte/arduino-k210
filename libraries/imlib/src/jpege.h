@@ -1,6 +1,6 @@
 #pragma once
 
-#include "image_cvt.h"
+#include "imlib.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -10,7 +10,6 @@ extern "C" {
 #endif
 
 #define OMV_JPEG_CODEC_ENABLE (0)
-#define IMLIB_ENABLE_IMAGE_FILE_IO (0)
 
 ////////////////
 // JPEG Stuff //
@@ -29,14 +28,6 @@ typedef enum jpeg_subsampling {
   JPEG_SUBSAMPLING_422 = 0x21, // Chroma subsampling 4:2:2
   JPEG_SUBSAMPLING_420 = 0x22, // Chroma subsampling 4:2:0
 } jpeg_subsampling_t;
-
-typedef struct {
-  uint32_t w;
-  uint32_t h;
-  uint8_t *data;
-  uint32_t size;
-  enum image_format_t pixfmt;
-} image_t;
 
 int jpeg_compress(image_t *src, uint8_t *dst_data, size_t *dst_size, int quality, jpeg_subsampling_t subsampling);
 

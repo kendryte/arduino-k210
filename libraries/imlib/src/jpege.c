@@ -27,7 +27,7 @@
  */
 #include "jpege.h"
 
-#include "image_cvt.h"
+#include "imlib.h"
 #include "rtthread.h"
 
 #include <stdbool.h>

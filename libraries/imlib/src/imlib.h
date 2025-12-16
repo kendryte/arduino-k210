@@ -6,6 +6,8 @@
 extern "C" {
 #endif
 
+#define IMLIB_ENABLE_IMAGE_FILE_IO (0)
+
 enum image_format_t
 {
     IMAGE_FORMAT_GRAYSCALE = 0, // bpp 1
@@ -14,6 +16,14 @@ enum image_format_t
     IMAGE_FORMAT_RGBP888,       // bpp 3 (planar RGB)
     IMAGE_FORMAT_INVALID = 4,
 };
+
+typedef struct {
+  uint32_t w;
+  uint32_t h;
+  uint8_t *data;
+  uint32_t size;
+  enum image_format_t pixfmt;
+} image_t;
 
 #define IM_MAX(a,b)     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
 #define IM_MIN(a,b)     ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })

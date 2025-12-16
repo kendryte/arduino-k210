@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "Image.h"
-#include "image_cvt.h"
+#include "imlib.h"
 #include "jpege.h"
 
 // Configure the image reader.
