@@ -90,14 +90,14 @@ const int _camera_resolution[][2] = {
     {1600, 1200}, /* UXGA      */
 };
 
-typedef struct image {
-    uint32_t w, h, bpp;
+// typedef struct image {
+//     uint32_t w, h, bpp;
 
-    struct {
-        uint8_t *ai;
-        uint8_t *display;
-    } buffer;
-} image_t;
+//     struct {
+//         uint8_t *ai;
+//         uint8_t *display;
+//     } buffer;
+// } image_t;
 
 typedef struct _camera_buffers {
     uint8_t *disply;

@@ -23,15 +23,22 @@
  *
  * Interface for using extra frame buffer RAM as a stack.
  */
-#include "py/obj.h"
-#include "py/runtime.h"
+// #include "py/obj.h"
+// #include "py/runtime.h"
 #include "fb_alloc.h"
-#include "framebuffer.h"
-#include "omv_boardconfig.h"
+// #include "framebuffer.h"
+// #include "omv_boardconfig.h"
 #include "omv_common.h"
 
-extern char _fb_alloc_end;
-static char *pointer = &_fb_alloc_end;
+#include "rtthread.h"
+
+#include <stdbool.h>
+
+static char *pointer = NULL; 
+
+// New internal boundaries set by fb_alloc_init
+static char *_fballoc_start_boundary = NULL;
+static char *_fballoc_end_boundary = NULL;
 
 #if defined(FB_ALLOC_STATS)
 static uint32_t alloc_bytes;
@@ -52,31 +59,51 @@ char *fb_alloc_sp() {
     return pointer;
 }
 
-MP_WEAK NORETURN void fb_alloc_fail() {
-    mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Out of fast frame buffer stack memory"));
+// MP_WEAK NORETURN void fb_alloc_fail() {
+rt_weak __attribute__((noreturn)) void fb_alloc_fail() {
+    // mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("Out of fast frame buffer stack memory"));
+    rt_kprintf("Out of fast frame buffer stack memory\n");
+    RT_ASSERT(0);
+    while(1) {}
 }
 
-void fb_alloc_init0() {
-    pointer = &_fb_alloc_end;
+void fb_alloc_init0(size_t size) {
+    _fballoc_start_boundary = (char *)rt_malloc_align(size, 8);
+    RT_ASSERT(0x00 != _fballoc_start_boundary);
+    _fballoc_end_boundary = _fballoc_start_boundary + size;
+
+    pointer = _fballoc_end_boundary;
+
+    #if defined(FB_ALLOC_STATS)
+    alloc_bytes = 0;
+    alloc_bytes_peak = 0;
+    #endif
+
     #if defined(OMV_FB_OVERLAY_MEMORY)
     pointer_overlay = &_fballoc_overlay_end;
     #endif
 }
 
 uint32_t fb_avail() {
-    framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
-    uint32_t temp = pointer - framebuffer_pool_end(fb) - sizeof(uint32_t);
+    // framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
+    // uint32_t temp = pointer - framebuffer_pool_end(fb) - sizeof(uint32_t);
+
+    uint32_t temp = (uint32_t)(pointer - _fballoc_start_boundary - sizeof(uint32_t));
+
     return (temp < sizeof(uint32_t)) ? 0 : temp;
 }
 
 void fb_alloc_mark() {
-    framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
+    // framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
     char *new_pointer = pointer - sizeof(uint32_t);
 
     // Check if allocation overwrites the framebuffer pixels
-    if (new_pointer < framebuffer_pool_end(fb)) {
-        nlr_jump(MP_OBJ_TO_PTR(mp_obj_new_exception_msg(&mp_type_MemoryError,
-                                                        MP_ERROR_TEXT("Out of fast frame buffer stack memory"))));
+    // if (new_pointer < framebuffer_pool_end(fb)) {
+    if (new_pointer < _fballoc_start_boundary) {
+        // nlr_jump(MP_OBJ_TO_PTR(mp_obj_new_exception_msg(&mp_type_MemoryError,
+                                                        // MP_ERROR_TEXT("Out of fast frame buffer stack memory"))));
+        rt_kprintf("Out of fast frame buffer stack memory\n");
+        RT_ASSERT(0);
     }
 
     // fb_alloc does not allow regions which are a size of 0 to be alloced,
@@ -98,7 +125,7 @@ static void int_fb_alloc_free_till_mark(bool free_permanent) {
     // This does not really help you in complex memory allocation operations where you want to be
     // able to unwind things until after a certain point. It also did not handle preventing
     // fb_alloc_free_till_mark() from running in recursive call situations (see find_blobs()).
-    while (pointer < &_fb_alloc_end) {
+    while (pointer < _fballoc_end_boundary) {
         uint32_t size = *((uint32_t *) pointer);
         if ((!free_permanent) && (size & FB_PERMANENT_FLAG)) {
             return;
@@ -117,7 +144,7 @@ static void int_fb_alloc_free_till_mark(bool free_permanent) {
         }
     }
     #if defined(FB_ALLOC_STATS)
-    printf("fb_alloc peak memory: %lu\n", alloc_bytes_peak);
+    rt_kprintf("fb_alloc peak memory: %lu\n", alloc_bytes_peak);
     #endif
 }
 
@@ -126,7 +153,7 @@ void fb_alloc_free_till_mark() {
 }
 
 void fb_alloc_mark_permanent() {
-    if (pointer < &_fb_alloc_end) {
+    if (pointer < _fballoc_end_boundary) {
         *((uint32_t *) pointer) |= FB_PERMANENT_FLAG;
     }
 }
@@ -137,7 +164,7 @@ void fb_alloc_free_till_mark_past_mark_permanent() {
 
 // returns null pointer without error if size==0
 void *fb_alloc(uint32_t size, int hints) {
-    framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
+    // framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
 
     if (!size) {
         return NULL;
@@ -154,7 +181,8 @@ void *fb_alloc(uint32_t size, int hints) {
     char *new_pointer = result - sizeof(uint32_t);
 
     // Check if allocation overwrites the framebuffer pixels
-    if (new_pointer < framebuffer_pool_end(fb)) {
+    // if (new_pointer < framebuffer_pool_end(fb)) {
+    if (new_pointer < _fballoc_start_boundary) {
         fb_alloc_fail();
     }
 
@@ -167,7 +195,7 @@ void *fb_alloc(uint32_t size, int hints) {
     if (alloc_bytes > alloc_bytes_peak) {
         alloc_bytes_peak = alloc_bytes;
     }
-    printf("fb_alloc %lu bytes\n", size);
+    rt_kprintf("fb_alloc %lu bytes\n", size);
     #endif
 
     #if defined(OMV_FB_OVERLAY_MEMORY)
@@ -193,13 +221,14 @@ void *fb_alloc(uint32_t size, int hints) {
 // returns null pointer without error if passed size==0
 void *fb_alloc0(uint32_t size, int hints) {
     void *mem = fb_alloc(size, hints);
-    memset(mem, 0, size); // does nothing if size is zero.
+    rt_memset(mem, 0, size); // does nothing if size is zero.
     return mem;
 }
 
 void *fb_alloc_all(uint32_t *size, int hints) {
-    framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
-    uint32_t temp = pointer - framebuffer_pool_end(fb) - sizeof(uint32_t);
+    // framebuffer_t *fb = framebuffer_get(FB_MAINFB_ID);
+    // uint32_t temp = pointer - framebuffer_pool_end(fb) - sizeof(uint32_t);
+    uint32_t temp = (uint32_t)(pointer - _fballoc_start_boundary - sizeof(uint32_t));
 
     if (temp < sizeof(uint32_t)) {
         *size = 0;
@@ -227,7 +256,7 @@ void *fb_alloc_all(uint32_t *size, int hints) {
     if (alloc_bytes > alloc_bytes_peak) {
         alloc_bytes_peak = alloc_bytes;
     }
-    printf("fb_alloc_all %lu bytes\n", *size);
+    rt_kprintf("fb_alloc_all %lu bytes\n", *size);
     #endif
 
     #if defined(OMV_FB_OVERLAY_MEMORY)
@@ -256,12 +285,12 @@ void *fb_alloc_all(uint32_t *size, int hints) {
 // returns null pointer without error if returned size==0
 void *fb_alloc0_all(uint32_t *size, int hints) {
     void *mem = fb_alloc_all(size, hints);
-    memset(mem, 0, *size); // does nothing if size is zero.
+    rt_memset(mem, 0, *size); // does nothing if size is zero.
     return mem;
 }
 
 void fb_free() {
-    if (pointer < &_fb_alloc_end) {
+    if (pointer < _fballoc_end_boundary) {
         uint32_t size = *((uint32_t *) pointer);
         size &= ~FB_PERMANENT_FLAG;
         #if defined(OMV_FB_OVERLAY_MEMORY)
@@ -279,7 +308,7 @@ void fb_free() {
 }
 
 void fb_free_all() {
-    while (pointer < &_fb_alloc_end) {
+    while (pointer < _fballoc_end_boundary) {
         uint32_t size = *((uint32_t *) pointer);
         size &= ~FB_PERMANENT_FLAG;
         #if defined(OMV_FB_OVERLAY_MEMORY)

@@ -1,20 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-
 #include "FS.h"
+
 #include "imlib.h"
+
+#include <stdint.h>
 
 namespace K210
 {
-    typedef struct rectangle
-    {
-        uint32_t x;
-        uint32_t y;
-        uint32_t w;
-        uint32_t h;
-    } rectangle_t;
-
     class Image
     {
 
@@ -123,6 +116,8 @@ namespace K210
 
         // Function to calculate image size
         uint32_t size() const { return mWidth * mHeight * mBpp; }
+
+        int to_imlib_image(image_t *img);
 
     private:
         uint32_t mWidth, mHeight, mBpp;

@@ -21,37 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *
- * Interface for using extra frame buffer RAM as a stack.
+ * Fast 9 and 25 bin sort.
  */
-#ifndef __FB_ALLOC_H__
-#define __FB_ALLOC_H__
-
+#ifndef __FSORT_H__
+#define __FSORT_H__
 #include <stdint.h>
-#include <stddef.h>
-
-#define FB_ALLOC_NO_HINT         0
-#define FB_ALLOC_PREFER_SPEED    1
-#define FB_ALLOC_PREFER_SIZE     2
-#define FB_ALLOC_CACHE_ALIGN     4
-
-#ifndef OMV_ALLOC_ALIGNMENT
-#define OMV_ALLOC_ALIGNMENT     (64) // (OMV_CACHE_LINE_SIZE)
-#endif
-
-void fb_alloc_init0(size_t size);
-
-char *fb_alloc_sp();
-void fb_alloc_fail();
-// void fb_alloc_init0();
-uint32_t fb_avail();
-void fb_alloc_mark();
-void fb_alloc_free_till_mark();
-void fb_alloc_mark_permanent(); // tag memory that should not be popped on exception
-void fb_alloc_free_till_mark_past_mark_permanent(); // frees past marked permanent allocations
-void *fb_alloc(uint32_t size, int hints);
-void *fb_alloc0(uint32_t size, int hints);
-void *fb_alloc_all(uint32_t *size, int hints); // returns pointer and sets size
-void *fb_alloc0_all(uint32_t *size, int hints); // returns pointer and sets size
-void fb_free();
-void fb_free_all();
-#endif /* __FF_ALLOC_H__ */
+void fsort(int *data, int n);
+#endif /* __FSORT_H__ */

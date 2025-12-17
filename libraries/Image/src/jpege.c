@@ -27,7 +27,6 @@
  */
 #include "jpege.h"
 
-#include "imlib.h"
 #include "rtthread.h"
 
 #include <stdbool.h>
@@ -123,7 +122,7 @@ static inline __attribute__((always_inline)) uint32_t __SSUB16(uint32_t op1,
   return ((op1 & 0xFFFF0000) - (op2 & 0xFFFF0000)) | ((op1 - op2) & 0xFFFF);
 }
 
-void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy,
+void jpeg_get_mcu(ImageInfo_t *src, int x_offset, int y_offset, int dx, int dy,
                   int8_t *Y0, int8_t *CB, int8_t *CR) {
     switch (src->pixfmt) {
 #if 0
@@ -1078,7 +1077,7 @@ static void jpeg_write_headers(jpeg_buf_t *jpeg_buf, int w, int h, int bpp, jpeg
 }
 
 // return true means failed, false is success
-int jpeg_compress(image_t *src, uint8_t *dst_data, size_t *dst_size, int quality, jpeg_subsampling_t subsampling) {
+int jpeg_compress(ImageInfo_t *src, uint8_t *dst_data, size_t *dst_size, int quality, jpeg_subsampling_t subsampling) {
     bool is_color = true;
 
     if(!src || !src->data || src->w <= 0 || src->h <= 0) {
@@ -1430,7 +1429,7 @@ int jpeg_compress(image_t *src, uint8_t *dst_data, size_t *dst_size, int quality
 
 #endif // (OMV_JPEG_CODEC_ENABLE == 0)
 
-bool jpeg_is_valid(image_t *img) {
+bool jpeg_is_valid(ImageInfo_t *img) {
     uint8_t *p = img->data, *p_end = img->data + img->size;
     while (p < p_end) {
         uint16_t header = (p[0] << 8) | p[1];
@@ -1473,7 +1472,7 @@ int jpeg_clean_trailing_bytes(int size, uint8_t *data) {
 
 #if defined(IMLIB_ENABLE_IMAGE_FILE_IO) && IMLIB_ENABLE_IMAGE_FILE_IO
 // This function inits the geometry values of an image.
-void jpeg_read_geometry(file_t *fp, image_t *img, const char *path, jpg_read_settings_t *rs) {
+void jpeg_read_geometry(file_t *fp, ImageInfo_t *img, const char *path, jpg_read_settings_t *rs) {
     for (;;) {
         uint16_t header;
         file_read(fp, &header, 2);
@@ -1519,12 +1518,12 @@ void jpeg_read_geometry(file_t *fp, image_t *img, const char *path, jpg_read_set
 }
 
 // This function reads the pixel values of an image.
-void jpeg_read_pixels(file_t *fp, image_t *img) {
+void jpeg_read_pixels(file_t *fp, ImageInfo_t *img) {
     file_seek(fp, 0);
     file_read(fp, img->pixels, img->size);
 }
 
-void jpeg_read(image_t *img, const char *path) {
+void jpeg_read(ImageInfo_t *img, const char *path) {
     file_t fp;
     jpg_read_settings_t rs;
 
@@ -1540,14 +1539,14 @@ void jpeg_read(image_t *img, const char *path) {
     file_close(&fp);
 }
 
-void jpeg_write(image_t *img, const char *path, int quality) {
+void jpeg_write(ImageInfo_t *img, const char *path, int quality) {
     file_t fp;
     file_open(&fp, path, false, FA_WRITE | FA_CREATE_ALWAYS);
     if (IM_IS_JPEG(img)) {
         file_write(&fp, img->pixels, img->size);
     } else {
         // alloc in jpeg compress
-        image_t out = { .w = img->w, .h = img->h, .pixfmt = PIXFORMAT_JPEG, .size = 0, .pixels = NULL };
+        ImageInfo_t out = { .w = img->w, .h = img->h, .pixfmt = PIXFORMAT_JPEG, .size = 0, .pixels = NULL };
         // When jpeg_compress needs more memory than in currently allocated it
         // will try to realloc. MP will detect that the pointer is outside of
         // the heap and return NULL which will cause an out of memory error.

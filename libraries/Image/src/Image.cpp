@@ -3,11 +3,10 @@
 #include "rtdbg.h"
 #include "rtthread.h"
 
-#include <string.h>
-
 #include "Image.h"
-#include "imlib.h"
 #include "jpege.h"
+
+#include <string.h>
 
 // Configure the image reader.
 #define STBI_NO_JPEG
@@ -700,7 +699,7 @@ namespace K210
             while (end != rgb565)
             {
                 gray = *grayscale++;
-                *rgb565++ = yuv_to_rgb565(gray, 0, 0);
+                *rgb565++ = COLOR_YUV_TO_RGB565(gray, 0, 0);
             }
         }
         break;
@@ -1516,7 +1515,7 @@ namespace K210
                                                 val11 * x_ratio * y_ratio;
                                 
                                 uint8_t gray = (uint8_t)interpolated;
-                                dst_ptr[y * width + x] = yuv_to_rgb565(gray, 0, 0);
+                                dst_ptr[y * width + x] = COLOR_YUV_TO_RGB565(gray, 0, 0);
                             }
                         }
                         return 0;
@@ -2582,8 +2581,8 @@ namespace K210
             quality = 80;
         }
 
-        // Create image_t structure for JPEG compression
-        image_t src_img;
+        // Create ImageInfo_t structure for JPEG compression
+        ImageInfo_t src_img;
         src_img.w = img->mWidth;
         src_img.h = img->mHeight;
         src_img.data = img->mPixel;
@@ -2662,8 +2661,8 @@ namespace K210
             quality = 80;
         }
 
-        // Create image_t structure for JPEG compression
-        image_t src_img;
+        // Create ImageInfo_t structure for JPEG compression
+        ImageInfo_t src_img;
         src_img.w = img->mWidth;
         src_img.h = img->mHeight;
         src_img.data = img->mPixel;
@@ -2699,6 +2698,23 @@ namespace K210
         return compress_jpeg(this, jpeg_buffer, buffer_capacity, jpeg_size, quality);
     }
 
+    int Image::to_imlib_image(image_t *img)
+    {
+        if(!img) {
+            return -2;
+        }
+
+        if((IMAGE_FORMAT_GRAYSCALE != mFormat) && (IMAGE_FORMAT_RGB565 != mFormat)) {
+            return -1;
+        }
+
+        img->w = mWidth;
+        img->h = mHeight;
+        img->pixfmt = (mFormat == IMAGE_FORMAT_GRAYSCALE) ? PIXFORMAT_GRAYSCALE : PIXFORMAT_RGB565;
+        img->data = mPixel;
+
+        return 0;
+    }
 }
 
 

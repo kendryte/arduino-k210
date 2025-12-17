@@ -307,6 +307,8 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
 int spisd_get_card_info(spisd_info_t *cardinfo) {
     uint8_t temp[16];
     uint8_t debug_buf[8] = {0};
+
+    (void)debug_buf;
     
     _io->wr_rd_byte(DUMMY_BYTE);
 

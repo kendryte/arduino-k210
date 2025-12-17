@@ -466,7 +466,7 @@ static void hal_uart_rx_notify(rt_device_t dev)
           dev, uart, uart->user_rx_notify, uart->user_rx_notify_data);
 
     if(uart->user_rx_notify) {
-        uart->user_rx_notify(uart->user_rx_notify_data);
+        uart->user_rx_notify((void *)uart->user_rx_notify_data);
     }
 }
 
