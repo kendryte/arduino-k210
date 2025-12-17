@@ -123,6 +123,62 @@ __STATIC_FORCEINLINE uint32_t __SMLAD(uint32_t x, uint32_t y, uint32_t sum)
                        + (((q31_t)sum))));
 }
 
+/**
+  \brief   Reverse byte order (32 bit)
+  \details Reverses the byte order in unsigned integer value. For example, 0x12345678 becomes 0x78563412.
+  \param [in]    value  Value to reverse
+  \return               Reversed value
+ */
+#define __REV(value) __builtin_bswap32(value)
+
+/**
+  \brief   Reverse byte order (16 bit)
+  \details Reverses the byte order within each halfword of a word. For example, 0x12345678 becomes 0x34127856.
+  \param [in]    value  Value to reverse
+  \return               Reversed value
+ */
+#define __REV16(value) __ROR(__REV(value), 16)
+
+/**
+  \brief   Reverse byte order (16 bit)
+  \details Reverses the byte order in a 16-bit value and returns the signed 16-bit result. For example, 0x0080 becomes 0x8000.
+  \param [in]    value  Value to reverse
+  \return               Reversed value
+ */
+#define __REVSH(value) (int16_t)__builtin_bswap16(value)
+
+/**
+  \brief   Rotate Right in unsigned value (32 bit)
+  \details Rotate Right (immediate) provides the value of the contents of a register rotated by a variable number of bits.
+  \param [in]    op1  Value to rotate
+  \param [in]    op2  Number of Bits to rotate
+  \return               Rotated value
+ */
+__STATIC_FORCEINLINE uint32_t __ROR(uint32_t op1, uint32_t op2)
+{
+    op2 %= 32U;
+    if (op2 == 0U) {
+        return op1;
+    }
+    return (op1 >> op2) | (op1 << (32U - op2));
+}
+
+/*
+ * @brief C custom defined SMUADX
+ */
+__STATIC_FORCEINLINE uint32_t __SMUADX(uint32_t x, uint32_t y)
+{
+    return ((uint32_t)(((((q31_t)x << 16) >> 16) * (((q31_t)y) >> 16)) + ((((q31_t)x) >> 16) * (((q31_t)y << 16) >> 16))));
+}
+
+/*
+ * @brief C custom defined SMUAD
+ */
+__STATIC_FORCEINLINE uint32_t __SMUAD(uint32_t x, uint32_t y)
+{
+    return ((uint32_t)(((((q31_t)x << 16) >> 16) * (((q31_t)y << 16) >> 16)) + ((((q31_t)x) >> 16) * (((q31_t)y) >> 16))));
+}
+
 #ifdef __cplusplus
 }
 #endif

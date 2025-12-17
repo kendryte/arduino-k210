@@ -10,6 +10,15 @@
 #undef OMV_JPEG_CODEC_ENABLE
 #define OMV_JPEG_CODEC_ENABLE (0)
 
+#undef IMLIB_ENABLE_DRAW_STRING
+// #define IMLIB_ENABLE_DRAW_STRING (0)
+
+#undef IMLIB_ENABLE_DRAW_IMAGE
+// #define IMLIB_ENABLE_DRAW_IMAGE (0)
+
+#undef IMLIB_ENABLE_FLOOD_FILL
+// #define IMLIB_ENABLE_FLOOD_FILL (0)
+
 // enable Image read and write
 // #define IMLIB_ENABLE_IMAGE_FILE_IO (0)
 
@@ -33,3 +42,12 @@
 
 // enable imlib_bilateral_filter
 // #define IMLIB_ENABLE_BILATERAL
+
+// enable imlib_find_lines
+// #define IMLIB_ENABLE_FIND_LINES
+
+// enable imlib_find_line_segments
+// #define IMLIB_ENABLE_FIND_LINE_SEGMENTS
+
+// enable imlib_find_circles
+#define IMLIB_ENABLE_FIND_CIRCLES

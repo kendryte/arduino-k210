@@ -1472,32 +1472,32 @@ int imlib_image_std(image_t *src); // grayscale only
 
 // Helper Functions
 void imlib_zero(image_t *img, image_t *mask, bool invert);
-// void imlib_draw_row_setup(imlib_draw_row_data_t *data);
-// void imlib_draw_row_teardown(imlib_draw_row_data_t *data);
-// void imlib_draw_row(int x_start, int x_end, int y_row, imlib_draw_row_data_t *data);
-// void imlib_draw_image_get_bounds(image_t *dst_img,
-//                                  image_t *src_img,
-//                                  int dst_x_start,
-//                                  int dst_y_start,
-//                                  float x_scale,
-//                                  float y_scale,
-//                                  rectangle_t *roi,
-//                                  int alpha,
-//                                  const uint8_t *alpha_palette,
-//                                  image_hint_t hint,
-//                                  point_t *p0,
-//                                  point_t *p1);
-// void imlib_flood_fill_int(image_t *out, image_t *img, int x, int y,
-//                           int seed_threshold, int floating_threshold,
-//                           flood_fill_call_back_t cb, void *data);
+void imlib_draw_row_setup(imlib_draw_row_data_t *data);
+void imlib_draw_row_teardown(imlib_draw_row_data_t *data);
+void imlib_draw_row(int x_start, int x_end, int y_row, imlib_draw_row_data_t *data);
+void imlib_draw_image_get_bounds(image_t *dst_img,
+                                 image_t *src_img,
+                                 int dst_x_start,
+                                 int dst_y_start,
+                                 float x_scale,
+                                 float y_scale,
+                                 rectangle_t *roi,
+                                 int alpha,
+                                 const uint8_t *alpha_palette,
+                                 image_hint_t hint,
+                                 point_t *p0,
+                                 point_t *p1);
+void imlib_flood_fill_int(image_t *out, image_t *img, int x, int y,
+                          int seed_threshold, int floating_threshold,
+                          flood_fill_call_back_t cb, void *data);
 // Drawing Functions
 // int imlib_get_pixel(image_t *img, int x, int y);
-// int imlib_get_pixel_fast(image_t *img, const void *row_ptr, int x);
-// void imlib_set_pixel(image_t *img, int x, int y, int p);
-// void imlib_draw_line(image_t *img, int x0, int y0, int x1, int y1, int c, int thickness);
-// void imlib_draw_rectangle(image_t *img, int rx, int ry, int rw, int rh, int c, int thickness, bool fill);
-// void imlib_draw_circle(image_t *img, int cx, int cy, int r, int c, int thickness, bool fill);
-// void imlib_draw_ellipse(image_t *img, int cx, int cy, int rx, int ry, int rotation, int c, int thickness, bool fill);
+int imlib_get_pixel_fast(image_t *img, const void *row_ptr, int x);
+void imlib_set_pixel(image_t *img, int x, int y, int p);
+void imlib_draw_line(image_t *img, int x0, int y0, int x1, int y1, int c, int thickness);
+void imlib_draw_rectangle(image_t *img, int rx, int ry, int rw, int rh, int c, int thickness, bool fill);
+void imlib_draw_circle(image_t *img, int cx, int cy, int r, int c, int thickness, bool fill);
+void imlib_draw_ellipse(image_t *img, int cx, int cy, int rx, int ry, int rotation, int c, int thickness, bool fill);
 // void imlib_draw_string(image_t *img,
 //                        int x_off,
 //                        int y_off,
@@ -1513,7 +1513,7 @@ void imlib_zero(image_t *img, image_t *mask, bool invert);
 //                        int string_rotation,
 //                        bool string_hmirror,
 //                        bool string_hflip);
-// void imlib_draw_event_histogram(image_t *img, ec_event_t *ec_event, int num_events, int gain);
+void imlib_draw_event_histogram(image_t *img, ec_event_t *ec_event, int num_events, int gain);
 // void imlib_draw_image(image_t *dst_img,
 //                       image_t *src_img,
 //                       int dst_x_start,
@@ -1630,28 +1630,28 @@ void imlib_bilateral_filter(image_t *img,
 //                           unsigned int pixels_threshold,
 //                           bool robust);
 // Color Tracking
-// void imlib_find_blobs(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
-//                       list_t *thresholds, bool invert, unsigned int area_threshold, unsigned int pixels_threshold,
-//                       bool merge, int margin,
-//                       bool (*threshold_cb) (void *, find_blobs_list_lnk_data_t *), void *threshold_cb_arg,
-//                       bool (*merge_cb) (void *, find_blobs_list_lnk_data_t *, find_blobs_list_lnk_data_t *), void *merge_cb_arg,
-//                       unsigned int x_hist_bins_max, unsigned int y_hist_bins_max);
+void imlib_find_blobs(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
+                      list_t *thresholds, bool invert, unsigned int area_threshold, unsigned int pixels_threshold,
+                      bool merge, int margin,
+                      bool (*threshold_cb) (void *, find_blobs_list_lnk_data_t *), void *threshold_cb_arg,
+                      bool (*merge_cb) (void *, find_blobs_list_lnk_data_t *, find_blobs_list_lnk_data_t *), void *merge_cb_arg,
+                      unsigned int x_hist_bins_max, unsigned int y_hist_bins_max);
 // Shape Detection
-// size_t trace_line(image_t *ptr, line_t *l, int *theta_buffer, uint32_t *mag_buffer, point_t *point_buffer); // helper/internal
-// void merge_alot(list_t *out, int threshold, int theta_threshold); // helper/internal
-// void imlib_find_lines(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
-//                       uint32_t threshold, unsigned int theta_margin, unsigned int rho_margin);
+size_t trace_line(image_t *ptr, line_t *l, int *theta_buffer, uint32_t *mag_buffer, point_t *point_buffer); // helper/internal
+void merge_alot(list_t *out, int threshold, int theta_threshold); // helper/internal
+void imlib_find_lines(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
+                      uint32_t threshold, unsigned int theta_margin, unsigned int rho_margin);
 // void imlib_lsd_find_line_segments(list_t *out,
 //                                   image_t *ptr,
 //                                   rectangle_t *roi,
 //                                   unsigned int merge_distance,
 //                                   unsigned int max_theta_diff);
-// void imlib_find_line_segments(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
-//                               uint32_t threshold, unsigned int theta_margin, unsigned int rho_margin,
-//                               uint32_t segment_threshold);
-// void imlib_find_circles(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
-//                         uint32_t threshold, unsigned int x_margin, unsigned int y_margin, unsigned int r_margin,
-//                         unsigned int r_min, unsigned int r_max, unsigned int r_step);
+void imlib_find_line_segments(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
+                              uint32_t threshold, unsigned int theta_margin, unsigned int rho_margin,
+                              uint32_t segment_threshold);
+void imlib_find_circles(list_t *out, image_t *ptr, rectangle_t *roi, unsigned int x_stride, unsigned int y_stride,
+                        uint32_t threshold, unsigned int x_margin, unsigned int y_margin, unsigned int r_margin,
+                        unsigned int r_min, unsigned int r_max, unsigned int r_step);
 // void imlib_find_rects(list_t *out, image_t *ptr, rectangle_t *roi,
 //                       uint32_t threshold);
 // 1/2D Bar Codes
