@@ -24,7 +24,7 @@ namespace K210
 
         int load_kmodel(uint8_t *buffer, size_t size, const char *name = "default"); // model should malloced by rt_malloc_align(size, 8);
 
-        int load_kmodel(fs::FS &fs, const char *name);
+        int load_kmodel(fs::FS &fs, const char *name, bool check_size = true);
         int load_kmodel(uint32_t offset);
 
         int run_kmodel(uint8_t *rgbp888, int w, int h, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);

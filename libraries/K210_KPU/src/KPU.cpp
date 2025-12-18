@@ -79,7 +79,7 @@ namespace K210
         return 0;
     }
 
-    int KPU_Base::load_kmodel(fs::FS &fs, const char *name)
+    int KPU_Base::load_kmodel(fs::FS &fs, const char *name, bool check_size)
     {
         fs::File file = fs.open(name);
 
@@ -123,15 +123,19 @@ namespace K210
             return -1;
         }
 
-        if(model_size > file_size)
-        {
-            file.close();
+        if(check_size) {
+            if(model_size > file_size)
+            {
+                file.close();
 
-            LOG_E("Model in filesystem maybe damaged");
-            return -1;
-        }
-        else if(model_size < file_size)
-        {
+                LOG_E("Model in filesystem maybe damaged, %d > %d", model_size, file_size);
+                return -1;
+            }
+            else if(model_size < file_size)
+            {
+                model_size = file_size;
+            }
+        } else {
             model_size = file_size;
         }
 
