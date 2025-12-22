@@ -117,7 +117,7 @@ namespace K210
         // Function to calculate image size
         uint32_t size() const { return mWidth * mHeight * mBpp; }
 
-        int to_imlib_image(image_t *img);
+        int as_imlib_image(image_t *img);
 
     private:
         uint32_t mWidth, mHeight, mBpp;

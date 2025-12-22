@@ -2698,7 +2698,7 @@ namespace K210
         return compress_jpeg(this, jpeg_buffer, buffer_capacity, jpeg_size, quality);
     }
 
-    int Image::to_imlib_image(image_t *img)
+    int Image::as_imlib_image(image_t *img)
     {
         if(!img) {
             return -2;
