@@ -173,29 +173,34 @@ namespace K210
         return 0;
     }
 
-    int KPU_Base::load_kmodel(uint32_t offset)
+    int KPU_Base::load_kmodel(uint32_t offset, int size)
     {
-        size_t hdr_size = 64 * 1024;
-        uint8_t *hdr_buff = (uint8_t *)rt_malloc_align(hdr_size, 8);
-        if(NULL == hdr_buff)
-        {
-            LOG_E("malloc failed");
-            return -1;
-        }
+        int model_size = size;
 
-        if(W25QXX_OK != hal_flash_read_data(offset, hdr_buff, hdr_size))
-        {
+        if((-1) == size) {
+            size_t hdr_size = 64 * 1024;
+
+            uint8_t *hdr_buff = (uint8_t *)rt_malloc_align(hdr_size, 8);
+            if(NULL == hdr_buff)
+            {
+                LOG_E("malloc failed");
+                return -1;
+            }
+
+            if(W25QXX_OK != hal_flash_read_data(offset, hdr_buff, hdr_size))
+            {
+                rt_free_align(hdr_buff);
+
+                LOG_E("read flash failed");
+                return -1;
+            }
+
+            model_size = maix_kpu_helper_probe_model_size(hdr_buff, hdr_size);
+
             rt_free_align(hdr_buff);
-
-            LOG_E("read flash failed");
-            return -1;
         }
 
-        int model_size = maix_kpu_helper_probe_model_size(hdr_buff, hdr_size);
-
-        rt_free_align(hdr_buff);
-
-        if(model_size <= 0)
+        if(0 >= model_size)
         {
             LOG_E("parse model failed");
             return -1;
