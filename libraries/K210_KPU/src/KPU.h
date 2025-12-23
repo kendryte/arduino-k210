@@ -32,6 +32,9 @@ namespace K210
 
         int get_result(uint8_t **data, size_t *count, uint32_t startIndex = 0);
 
+        size_t model_size() const { return model.size; }
+        uint8_t *model_data() const { return model.buffer; }
+
     protected:
         struct
         {

@@ -20,8 +20,6 @@ Image *img_sensor, *img_display;
 
 void setup()
 {
-    camera_buffers_t buff;
-
     Serial.begin(115200);
     while (!Serial) {
         ;
@@ -121,8 +119,8 @@ void loop()
 
     // 2. Define the cut region (Center 320x240 region from 640x480 image)
     rectangle_t cut_rect = {
-        .x = (uint32_t)(img_sensor->width() - 320) / 2,
-        .y = (uint32_t)(img_sensor->height() - 240) / 2,
+        .x = (int16_t)((img_sensor->width() - 320) / 2),
+        .y = (int16_t)((img_sensor->height() - 240) / 2),
         .w = 320,
         .h = 240
     };
