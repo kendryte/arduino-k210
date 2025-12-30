@@ -80,7 +80,7 @@ int tone_init(void)
 
         if (_tone_queue == NULL) {
             LOG_E("Could not create tone queue");
-            return 1; // ERR
+            return 0; // ERR
         }
         LOG_I("Tone queue created");
     }
@@ -107,7 +107,7 @@ int tone_init(void)
         LOG_I("Tone task created");
     }
 
-    return 0; // OK
+    return 1; // OK
 }
 
 void noTone(uint8_t _pin)
