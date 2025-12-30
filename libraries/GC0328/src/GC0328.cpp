@@ -668,7 +668,7 @@ int GC0328::set_contrast(int level)
 {
     int ret = 0;
 
-    level += (NUM_CONTRAST_LEVELS / 2);
+    level += (NUM_CONTRAST_LEVELS / 2 + 1);
     if (level < 0 || level > NUM_CONTRAST_LEVELS) {
         return -1;
     }
@@ -689,8 +689,8 @@ int GC0328::set_saturation(int level)
 {
     int ret = 0;
 
-    level += (NUM_CONTRAST_LEVELS / 2);
-    if (level < 0 || level > NUM_CONTRAST_LEVELS) {
+    level += (NUM_SATURATION_LEVELS / 2 + 1);
+    if (level < 0 || level > NUM_SATURATION_LEVELS) {
         return -1;
     }
 
