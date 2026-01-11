@@ -6,18 +6,18 @@
       "websiteURL": "https://github.com/kendryte/arduino-k210",
       "email": "kendryte747@canaan-creative.com",
       "help": {
-        "online": "https://developer.canaan-creative.com/index.html?channel=developer#/home/0"
+        "online": "https://www.kendryte.com/index.html?channel=developer#/home/0"
       },
       "platforms": [
         {
           "name": "K210",
           "architecture": "K210",
           "category": "Contributed",
-          "version": "0.1.0",
-          "url": "https://github.com/kendryte/arduino-k210/releases/download/0.1.0/k210-0.1.0.zip",
-          "archiveFileName": "k210-0.1.0.zip",
-          "checksum": "SHA-256:ef9927a2473d595af9b23db03dc2fde9ace606d455aa06bef698a63c19376294",
-          "size": "2272474",
+          "version": "0.2.0",
+          "url": "https://github.com/kendryte/arduino-k210/releases/download/0.2.0/k210-0.2.0.zip",
+          "archiveFileName": "k210-0.2.0.zip",
+          "checksum": "SHA-256:83df28f9b36d04943b76ebabe9fa2f7a2455a57f42be4933c9c0acd2bfa1868d",
+          "size": "2423996",
           "help": {
             "online": ""
           },
