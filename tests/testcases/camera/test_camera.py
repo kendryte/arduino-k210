@@ -1,3 +1,3 @@
 def test_camera(dut):
-    '''camera reset and snapshot test'''
+    """GC0328 identification, controls, buffers, and snapshots"""
     dut.expect_unity_test_output(timeout=240)

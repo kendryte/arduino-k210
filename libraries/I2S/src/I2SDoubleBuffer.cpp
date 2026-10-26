@@ -1,216 +1,78 @@
-/*
-  Copyright (c) 2016 Arduino LLC.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
-#include <stdlib.h>
-#include <string.h>
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "I2SDoubleBuffer.h"
-
 #include "rtthread.h"
-
-I2SDoubleBuffer::I2SDoubleBuffer() :
-  _size(DEFAULT_I2S_BUFFER_SIZE)
-{
-  _lock_init(&_lock);
-
-  reset();
-}
-
-I2SDoubleBuffer::~I2SDoubleBuffer()
-{
-  _lock_acquire(&_lock);
-
-  rt_free_align(_buff);
-
-  _lock_release(&_lock);
-}
-
-void I2SDoubleBuffer::end()
-{
-  _lock_acquire(&_lock);
-
-  rt_free_align(_buff);
-
-  _index = 0;
-  _length[0] = 0;
-  _length[1] = 0;
-  _readOffset[0] = 0;
-  _readOffset[1] = 0;
-
-  _lock_release(&_lock);
-}
-
+#include <limits.h>
+#include <string.h>
 void I2SDoubleBuffer::setSize(int size)
 {
-  _lock_acquire(&_lock);
-
-  _size = size;
-
-  _lock_release(&_lock);
+    if (!storage_ && size >= 4 && size <= INT_MAX / 2)
+        capacity_ = size - size % 4;
 }
-
 void I2SDoubleBuffer::reset()
 {
-  _lock_acquire(&_lock);
-
-  if(_buff) {
-    rt_free_align(_buff);
-  }
-
-  _buff = (uint8_t *)rt_malloc_align(_size * 2, 8);
-  RT_ASSERT(_buff);
-
-  _buffer[0] = _buff;
-  _buffer[1] = (uint8_t*)(_buff + _size);
-
-  _index = 0;
-  _length[0] = 0;
-  _length[1] = 0;
-  _readOffset[0] = 0;
-  _readOffset[1] = 0;
-
-  _lock_release(&_lock);
+    if (!storage_)
+        storage_ = static_cast<uint8_t*>(rt_malloc_align(static_cast<size_t>(capacity_) * 2, 8));
+    application_ = 0;
+    flush();
 }
-
+void I2SDoubleBuffer::end()
+{
+    if (storage_)
+        rt_free_align(storage_);
+    storage_ = nullptr;
+    flush();
+}
 size_t I2SDoubleBuffer::availableForWrite()
 {
-  _lock_acquire(&_lock);
-
-  size_t r = (_size - (_length[_index] - _readOffset[_index]));
-
-  _lock_release(&_lock);
-
-  return r;
+    return storage_ ? capacity_ - used_ : 0;
 }
-
-size_t I2SDoubleBuffer::write(const void *buffer, size_t size)
-{
-  size_t space = availableForWrite();
-
-  if (size > space) {
-    size = space;
-  }
-
-  if (size == 0) {
-    return 0;
-  }
-
-  _lock_acquire(&_lock);
-
-  rt_memcpy(&_buffer[_index][_length[_index]], buffer, size);
-
-  _length[_index] += size;
-
-  _lock_release(&_lock);
-
-  return size;
-}
-
-size_t I2SDoubleBuffer::read(void *buffer, size_t size)
-{
-  size_t avail = available();
-
-  if (size > avail) {
-    size = avail;
-  }
-
-  if (size == 0) {
-    return 0;
-  }
-
-  _lock_acquire(&_lock);
-
-  rt_memcpy(buffer, &_buffer[_index][_readOffset[_index]], size);
-  _readOffset[_index] += size;
-
-  _lock_release(&_lock);
-
-  return size;
-}
-
-size_t I2SDoubleBuffer::peek(void *buffer, size_t size)
-{
-  size_t avail = available();
-
-  if (size > avail) {
-    size = avail;
-  }
-
-  if (size == 0) {
-    return 0;
-  }
-
-  _lock_acquire(&_lock);
-
-  rt_memcpy(buffer, &_buffer[_index][_readOffset[_index]], size);
-
-  _lock_release(&_lock);
-
-  return size;
-}
-
-void* I2SDoubleBuffer::data()
-{
-  _lock_acquire(&_lock);
-
-  void *p = (void*)_buffer[_index];
-
-  _lock_release(&_lock);
-
-  return p;
-}
-
 size_t I2SDoubleBuffer::available()
 {
-  _lock_acquire(&_lock);
-
-  size_t r = _length[_index] - _readOffset[_index];
-
-  _lock_release(&_lock);
-
-  return r;
+    return storage_ ? used_ - consumed_ : 0;
 }
-
+size_t I2SDoubleBuffer::write(const void* buffer, size_t size)
+{
+    if (!buffer)
+        return 0;
+    if (size > availableForWrite())
+        size = availableForWrite();
+    if (size)
+        memcpy(storage_ + application_ * capacity_ + used_, buffer, size);
+    used_ += size;
+    return size;
+}
+size_t I2SDoubleBuffer::peek(void* buffer, size_t size)
+{
+    if (!buffer)
+        return 0;
+    if (size > available())
+        size = available();
+    if (size)
+        memcpy(buffer, storage_ + application_ * capacity_ + consumed_, size);
+    return size;
+}
+size_t I2SDoubleBuffer::read(void* buffer, size_t size)
+{
+    const size_t count = peek(buffer, size);
+    consumed_ += count;
+    return count;
+}
+void* I2SDoubleBuffer::data()
+{
+    return storage_ ? storage_ + (1 - application_) * capacity_ : nullptr;
+}
 void I2SDoubleBuffer::swap(int length)
 {
-  _lock_acquire(&_lock);
-
-  if (_index == 0) {
-    _index = 1;
-  } else {
-    _index = 0;
-  }
-
-  _length[_index] = length;
-  _readOffset[_index] = 0;
-
-  _lock_release(&_lock);
+    if (!storage_)
+        return;
+    application_ = 1 - application_;
+    consumed_    = 0;
+    used_        = length > 0 ? static_cast<size_t>(length > capacity_ ? capacity_ : length) : 0;
 }
-
 void I2SDoubleBuffer::flush()
 {
-  _lock_acquire(&_lock);
-
-  _index = 0;
-  _length[0] = 0;
-  _length[1] = 0;
-  _readOffset[0] = 0;
-  _readOffset[1] = 0;
-
-  _lock_release(&_lock);
+    used_ = consumed_ = 0;
 }

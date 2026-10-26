@@ -1,100 +1,71 @@
-/*
-  Copyright (c) 2016 Arduino LLC.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #pragma once
-
-#include <inttypes.h>
-#include <stdio.h> // for size_t
-
-#include "WString.h"
 #include "Printable.h"
-
+#include "WString.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#define BIN 2
+#define OCT 8
 #define DEC 10
 #define HEX 16
-#define OCT 8
-#define BIN 2
 
-// namespace arduino {
-
-class Print
-{
-  private:
-    int write_error;
-    size_t printNumber(unsigned long, uint8_t);
-    size_t printNumber(unsigned long long, uint8_t);
-    size_t printFloat(double, uint8_t);
-  protected:
-    void setWriteError(int err = 1) { write_error = err; }
-  public:
-    Print() : write_error(0) {}
-
-    int getWriteError() { return write_error; }
-    void clearWriteError() { setWriteError(0); }
-
-    virtual size_t write(uint8_t) = 0;
-    size_t write(const char *str) {
-      if (str == NULL) return 0;
-      return write((const uint8_t *)str, strlen(str));
+class Print {
+public:
+    virtual ~Print()                    = default;
+    virtual size_t write(uint8_t value) = 0;
+    virtual size_t write(const uint8_t* data, size_t count);
+    size_t         write(const char* text);
+    size_t         write(const char* text, size_t count);
+    virtual int    availableForWrite()
+    {
+        return 0;
+    }
+    virtual void flush() { }
+    int          getWriteError() const
+    {
+        return error_;
+    }
+    void clearWriteError()
+    {
+        error_ = 0;
+    }
+    size_t                    printf(const char* format, ...) __attribute__((format(printf, 2, 3)));
+    size_t                    print(const char* text);
+    size_t                    print(const __FlashStringHelper* text);
+    size_t                    print(const String& text);
+    size_t                    print(const Printable& value);
+    size_t                    print(char value);
+    size_t                    print(unsigned char value, int base = DEC);
+    size_t                    print(int value, int base = DEC);
+    size_t                    print(unsigned int value, int base = DEC);
+    size_t                    print(long value, int base = DEC);
+    size_t                    print(unsigned long value, int base = DEC);
+    size_t                    print(long long value, int base = DEC);
+    size_t                    print(unsigned long long value, int base = DEC);
+    size_t                    print(double value, int decimals = 2);
+    size_t                    println();
+    template <class T> size_t println(const T& value)
+    {
+        const size_t count = print(value);
+        return count + println();
+    }
+    template <class T> size_t println(T value, int format)
+    {
+        const size_t count = print(value, format);
+        return count + println();
     }
 
-    virtual size_t write(const uint8_t *buffer, size_t size);
-    size_t write(const char *buffer, size_t size) {
-      return write((const uint8_t *)buffer, size);
+protected:
+    void setWriteError(int error = 1)
+    {
+        error_ = error;
     }
 
-    size_t printf(const char * format, ...)  __attribute__ ((format (printf, 2, 3)));
-
-    // add availableForWrite to make compatible with Arduino Print.h
-    // default to zero, meaning "a single write may block"
-    // should be overriden by subclasses with buffering
-    virtual int availableForWrite() { return 0; }
-
-    size_t print(const __FlashStringHelper *);
-    size_t print(const String &);
-    size_t print(const char[]);
-    size_t print(char);
-    size_t print(unsigned char, int = DEC );
-    size_t print(int, int = DEC );
-    size_t print(unsigned int, int = DEC );
-    size_t print(long, int = DEC );
-    size_t print(unsigned long, int = DEC );
-    size_t print(long long, int = DEC );
-    size_t print(unsigned long long, int = DEC );
-    size_t print(double, int = 2);
-    size_t print(const Printable&);
-
-    size_t println(const __FlashStringHelper *);
-    size_t println(const String &s);
-    size_t println(const char[]);
-    size_t println(char);
-    size_t println(unsigned char, int = DEC );
-    size_t println(int, int = DEC );
-    size_t println(unsigned int, int = DEC );
-    size_t println(long, int = DEC );
-    size_t println(unsigned long, int = DEC );
-    size_t println(long long, int = DEC );
-    size_t println(unsigned long long, int = DEC );
-    size_t println(double, int = 2);
-    size_t println(const Printable&);
-    size_t println(void);
-
-    virtual void flush() { /* Empty implementation for backward compatibility */ }
+private:
+    int                             error_ = 0;
+    template <class Integer> size_t number(Integer value, int radix);
 };
-
-// }
-// using arduino::Print;

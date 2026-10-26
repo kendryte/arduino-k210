@@ -1,613 +1,225 @@
-#define DBG_TAG "Wire"
-#define DBG_LVL DBG_WARNING
-#include "rtdbg.h"
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
-#include "Arduino.h"
 #include "Wire.h"
+#include <cstring>
 
-static int i2c_slave_irq(void *TwoWireInst);
-
-TwoWire Wire = TwoWire(0);
-
-TwoWire::TwoWire(int busNum)
-    :_clockFreq(100000)
-    ,_sclPin(-1)
-    ,_sdaPin(-1)
-    ,_txAddress(0)
-    ,_txBuff(NULL)
-    ,_rxBuff(NULL)
-    ,_nonStop(false)
-    ,_nonStopTask(NULL)
-    ,_lock(NULL)
-    ,_initialized(false)
-    ,_isSlave(false)
-    ,_slaveTransmitting(false)
-    ,user_onRequest(NULL)
-    ,user_onReceive(NULL)
-{
-    if(busNum >= I2C_DEVICE_MAX) {
-        LOG_E("TwoWire Invalid busNum %d\n", busNum);
-        return;
+namespace {
+TwoWire* owners[I2C_DEVICE_MAX] = {};
+class Lock {
+public:
+    explicit Lock(rt_mutex_t mutex)
+        : mutex_(mutex)
+    {
+        if (mutex_ && rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK)
+            mutex_ = nullptr;
     }
-    _i2cNum = (i2c_device_number_t)busNum;
-}
+    ~Lock()
+    {
+        if (mutex_)
+            rt_mutex_release(mutex_);
+    }
+    explicit operator bool() const
+    {
+        return mutex_ != nullptr;
+    }
 
+private:
+    rt_mutex_t mutex_;
+};
+}
+TwoWire Wire(0);
+TwoWire::TwoWire(int busNum)
+    : _i2cNum(static_cast<i2c_device_number_t>(busNum >= 0 && busNum < I2C_DEVICE_MAX ? busNum : I2C_DEVICE_MAX))
+{
+}
 TwoWire::~TwoWire()
 {
     end();
 }
 
-// Master
 bool TwoWire::begin(int8_t sclPin, int8_t sdaPin, uint32_t frequency)
 {
-    bool started = false;
-    char _lock_name[32]; // real max len 8
-
-    if(_i2cNum >= I2C_DEVICE_MAX) {
-        LOG_E("TwoWire Invalid _i2cNum %d\n", _i2cNum);
-        started = false;
-        goto _end;
-    }
-
-    if(_initialized) {
-        LOG_W("Bus already started.");
-        started = true;
-        goto _end;
-    }
-
-    if(_isSlave) {
-        LOG_W("Bus already started in Slave Mode.\n");
-        goto _end;
-    }
-
-    _sclPin = sclPin;
-    _sdaPin = sdaPin;
-    // _clockFreq = frequency;
-
-    if((sclPin < 0) || (sdaPin < 0)) {
-        LOG_E("Invalid sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
+    if (_i2cNum == I2C_DEVICE_MAX || sclPin < 0 || sclPin >= K210_IO_NUMS || sdaPin < 0 || sdaPin >= K210_IO_NUMS
+        || sclPin == sdaPin || !frequency)
+        return false;
+    if (ready_)
+        return sclPin == scl_ && sdaPin == sda_ && frequency == clock_;
+    TwoWire* empty = nullptr;
+    if (!__atomic_compare_exchange_n(&owners[_i2cNum], &empty, this, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return false;
+    mutex_ = rt_mutex_create("wire", RT_IPC_FLAG_PRIO);
+    if (!mutex_) {
+        __atomic_store_n(&owners[_i2cNum], static_cast<TwoWire*>(nullptr), __ATOMIC_RELEASE);
         return false;
     }
-
-    snprintf(_lock_name, sizeof(_lock_name), "%2dMi2c", _i2cNum);
-    if(NULL == _lock) {
-        _lock = rt_mutex_create(_lock_name, RT_NULL);
-        if(NULL == _lock) {
-            LOG_E("rt_mutex_create failed.\n");
-            return false;
-        }
-    }
-
-    if(RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER)) {
-        LOG_E("could not acquire lock.");
-        return false;
-    }
-
-    _txBuff = new RingBuffer();
-    _rxBuff = new RingBuffer();
-
-    if(!_txBuff || !_rxBuff) {
-        LOG_E("Alloc ringbuffer failed.\n");
-        rt_mutex_release(_lock);
-        goto _end;
-    }
-
-    hal_fpioa_set_pin_func(_sclPin, (fpioa_function_t)(_i2cNum * 2 + FUNC_I2C0_SCLK));
-    hal_fpioa_set_pin_func(_sdaPin, (fpioa_function_t)(_i2cNum * 2 + FUNC_I2C0_SDA));
-
-    started = true;
-
-    rt_mutex_release(_lock);
-
-_end:
-    if(!started) {
-        delete _txBuff;
-        delete _rxBuff;
-    }
-
-    if(started) {
-        _initialized = true;
-    }
-
-    return started;
-}
-
-// Slave
-bool TwoWire::begin(uint16_t address, int8_t sclPin, int8_t sdaPin, uint32_t frequency)
-{
-#if 0
-    bool started = false;
-    int address_width = 7;
-
-    volatile i2c_t *i2c_adapter = i2c[_i2cNum];
-
-    _sclPin = sclPin;
-    _sdaPin = sdaPin;
-    _clockFreq = frequency;
-
-    _isSlave = true;
-    _slaveTransmitting = false;
-
-    if((sclPin < 0) || (sdaPin < 0)) {
-        LOG_E("Invalid sclPin(%d) or sdaPin(%d)\n", sclPin, sdaPin);
-        return false;
-    }
-
-    char _lock_name[RT_NAME_MAX];
-    snprintf(_lock_name, sizeof(_lock_name), "%dSi2c", _i2cNum);
-    if(NULL == _lock) {
-        _lock = rt_mutex_create(_lock_name, RT_NULL);
-        if(NULL == _lock) {
-            LOG_E("rt_mutex_create failed.\n");
-            return false;
-        }
-    }
-
-    if(RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER)) {
-        LOG_E("could not acquire lock.");
-        return false;
-    }
-
-    _txBuff = new RingBuffer();
-    _rxBuff = new RingBuffer();
-
-    if(!_txBuff || !_rxBuff) {
-        LOG_E("Alloc ringbuffer failed.\n");
-        goto _end;
-    }
-
-    hal_fpioa_set_pin_func(_sclPin, (fpioa_function_t)(_i2cNum * 2 + FUNC_I2C0_SCLK));
-    hal_fpioa_set_pin_func(_sdaPin, (fpioa_function_t)(_i2cNum * 2 + FUNC_I2C0_SDA));
-
-    address_width = (address & 0x380) ? 10 : 7;
-
-//{
-    // i2c_init_as_slave
-    sysctl_clock_enable((sysctl_clock_t)(SYSCTL_CLOCK_I2C0 + _i2cNum));
-    sysctl_clock_set_threshold((sysctl_threshold_t)(SYSCTL_THRESHOLD_I2C0 + _i2cNum), 3);
-
-    i2c_adapter->enable = 0;
-    i2c_adapter->con = (address_width == 10 ? I2C_CON_10BITADDR_SLAVE : 0) | I2C_CON_SPEED(1) | I2C_CON_STOP_DET_IFADDRESSED;
-    i2c_adapter->ss_scl_hcnt = I2C_SS_SCL_HCNT_COUNT(37);
-    i2c_adapter->ss_scl_lcnt = I2C_SS_SCL_LCNT_COUNT(40);
-    i2c_adapter->sar = I2C_SAR_ADDRESS(address);
-    i2c_adapter->rx_tl = I2C_RX_TL_VALUE(0);
-    i2c_adapter->tx_tl = I2C_TX_TL_VALUE(0);
-    i2c_adapter->intr_mask = I2C_INTR_MASK_RX_FULL | I2C_INTR_MASK_START_DET | I2C_INTR_MASK_STOP_DET | I2C_INTR_MASK_RD_REQ;
-
-    plic_set_priority((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum), 1);
-    plic_irq_register((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum), i2c_slave_irq, this);
-    plic_irq_enable((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum));
-
-    i2c_adapter->enable = I2C_ENABLE_ENABLE;
-//}
-
-    started = true;
-
-_end:
-    if(!started) {
-        delete _txBuff;
-        delete _rxBuff;
-    }
-    rt_mutex_release(_lock);
-
-    return started;
-#else
-    if(!begin(sclPin, sdaPin, frequency)) {
-        return false;
-    }
-
-    if(NULL != _lock) {
-        if(RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER)) {
-            LOG_E("could not acquire lock.");
-            return false;
-        }
-    }
-
-    _isSlave = true;
-    _slaveTransmitting = false;
-
-    int address_width = (address & 0x380) ? 10 : 7;
-
-//{
-    // i2c_init_as_slave
-    sysctl_clock_enable((sysctl_clock_t)(SYSCTL_CLOCK_I2C0 + _i2cNum));
-    sysctl_clock_set_threshold((sysctl_threshold_t)(SYSCTL_THRESHOLD_I2C0 + _i2cNum), 3);
-
-    volatile i2c_t *i2c_adapter = i2c[_i2cNum];
-
-    i2c_adapter->enable = 0;
-    i2c_adapter->con = (address_width == 10 ? I2C_CON_10BITADDR_SLAVE : 0) | I2C_CON_SPEED(1) | I2C_CON_STOP_DET_IFADDRESSED;
-    i2c_adapter->ss_scl_hcnt = I2C_SS_SCL_HCNT_COUNT(37);
-    i2c_adapter->ss_scl_lcnt = I2C_SS_SCL_LCNT_COUNT(40);
-    i2c_adapter->sar = I2C_SAR_ADDRESS(address);
-    i2c_adapter->rx_tl = I2C_RX_TL_VALUE(0);
-    i2c_adapter->tx_tl = I2C_TX_TL_VALUE(0);
-    i2c_adapter->intr_mask = I2C_INTR_MASK_RX_FULL | I2C_INTR_MASK_START_DET | I2C_INTR_MASK_STOP_DET | I2C_INTR_MASK_RD_REQ;
-
-    plic_set_priority((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum), 1);
-    plic_irq_register((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum), i2c_slave_irq, this);
-    plic_irq_enable((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum));
-
-    i2c_adapter->enable = I2C_ENABLE_ENABLE;
-//}
-
-    rt_mutex_release(_lock);
-
+    clock_ = frequency;
+    scl_   = sclPin;
+    sda_   = sdaPin;
+    hal_fpioa_set_pin_func(scl_, static_cast<fpioa_function_t>(FUNC_I2C0_SCLK + 2 * _i2cNum));
+    hal_fpioa_set_pin_func(sda_, static_cast<fpioa_function_t>(FUNC_I2C0_SDA + 2 * _i2cNum));
+    i2c_init(_i2cNum, 0, 7, clock_);
+    ready_ = true;
+    clearWriteError();
     return true;
-#endif
 }
-
+bool TwoWire::begin(uint16_t, int8_t, int8_t, uint32_t)
+{
+    return false;
+}
 bool TwoWire::end()
 {
-    if(NULL != _lock) {
-        if(RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER)) {
-            LOG_E("could not acquire lock.");
-            return false;
-        }
-    }
-
-    if(_isSlave) {
-        // release irq
-        _isSlave = false;
-
-        plic_irq_disable((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum));
-        plic_irq_unregister((plic_irq_t)(IRQN_I2C0_INTERRUPT + _i2cNum));
-    }
-
-    sysctl_clock_disable((sysctl_clock_t)(SYSCTL_CLOCK_I2C0 + _i2cNum));
-
-    // free pins
-    hal_fpioa_clr_pin_func(_sclPin);
-    hal_fpioa_clr_pin_func(_sdaPin);
-
-    delete _txBuff;
-    delete _rxBuff;
-
-    _initialized = false;
-    _txAddress = 0;
-
-    rt_mutex_release(_lock);
-
-    if(NULL != _lock) {
-        rt_mutex_delete(_lock);
-        _lock = NULL;
-    }
-
+    if (!ready_)
+        return true;
+    // Lifecycle operations require the application to stop all users first.
+    i2c[_i2cNum]->enable = 0;
+    hal_fpioa_clr_pin_func(scl_);
+    hal_fpioa_clr_pin_func(sda_);
+    cancel();
+    rxSize_ = rxOffset_ = 0;
+    ready_              = false;
+    rt_mutex_delete(mutex_);
+    mutex_ = nullptr;
+    __atomic_store_n(&owners[_i2cNum], static_cast<TwoWire*>(nullptr), __ATOMIC_RELEASE);
     return true;
 }
-
-void TwoWire::setClock(uint32_t freq)
+bool TwoWire::accessible() const
 {
-    _clockFreq = freq;
+    return phase_ == Idle || task_ == rt_thread_self();
 }
-
-void TwoWire::beginTransmission(uint16_t address)
+void TwoWire::cancel()
 {
-    if(_isSlave) {
-        LOG_E("Bus is Slave Mode\n");
+    phase_    = Idle;
+    task_     = nullptr;
+    txSize_   = 0;
+    overflow_ = false;
+}
+void TwoWire::setClock(uint32_t frequency)
+{
+    Lock lock(mutex_);
+    if (lock && accessible() && frequency)
+        clock_ = frequency;
+}
+void TwoWire::start(uint16_t address)
+{
+    Lock lock(mutex_);
+    if (!lock || !accessible())
         return;
-    }
-
-    if(_nonStop && _nonStopTask == rt_thread_self()) {
-        LOG_W("Unfinished Repeated Start transaction! Expected requestFrom, not beginTransmission! Clearing...\n");
-        //release lock
-        rt_mutex_release(_lock);
-    }
-
-    if((NULL == _lock) || (RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER))) {
-        LOG_E("could not acquire lock\n");
-        return;
-    }
-
-    flush();
-    _nonStop = false;
-
-    if(_txAddress != address) {
-        _txAddress = address;
-
-        uint32_t addr_width = (_txAddress & 0x380) ? 10 : 7;
-        i2c_init(_i2cNum, _txAddress, addr_width, _clockFreq);
-    }
+    cancel();
+    clearWriteError();
+    address_ = address;
+    task_    = rt_thread_self();
+    phase_   = Collecting;
+    if (address > 1023)
+        setWriteError();
 }
-
-/*
-https://www.arduino.cc/reference/en/language/functions/communication/wire/endtransmission/
-endTransmission() returns:
-0: success.
-1: data too long to fit in transmit buffer.
-2: received NACK on transmit of address.
-3: received NACK on transmit of data.
-4: other error.
-5: timeout
-6: bus error.
-*/
-uint8_t TwoWire::endTransmission(bool sendStop)
+size_t TwoWire::write(const uint8_t* buffer, size_t count)
 {
-    int ret = 0;
-
-    if(_isSlave) {
-        LOG_W("Bus is Slave Mode\n");
+    Lock lock(mutex_);
+    if (!lock || !accessible())
+        return 0;
+    if (phase_ != Collecting || address_ > 1023 || (!buffer && count)) {
+        setWriteError();
+        return 0;
+    }
+    const size_t room     = sizeof(tx_) - txSize_;
+    const size_t accepted = count < room ? count : room;
+    if (accepted)
+        std::memcpy(tx_ + txSize_, buffer, accepted);
+    txSize_ += accepted;
+    if (accepted != count) {
+        overflow_ = true;
+        setWriteError();
+    }
+    return accepted;
+}
+uint8_t TwoWire::transferStatus(int sdkResult) const
+{
+    if (!sdkResult)
+        return 0;
+    const uint32_t cause = i2c[_i2cNum]->tx_abrt_source;
+    if (cause & (I2C_TX_ABRT_SOURCE_7B_ADDR_NOACK | I2C_TX_ABRT_SOURCE_10B_ADDR1_NOACK | I2C_TX_ABRT_SOURCE_10B_ADDR2_NOACK))
+        return 2;
+    if (cause & I2C_TX_ABRT_SOURCE_TXDATA_NOACK)
+        return 3;
+    return 4;
+}
+uint8_t TwoWire::endTransmission(bool stop)
+{
+    Lock lock(mutex_);
+    if (!lock || !accessible())
         return 4;
-    }
-    if(!_txBuff) {
-        LOG_D("NULL TX buffer pointer\n");
-        return 4;
-    }
-
-    if(sendStop) {
-        uint8_t buf[HARDWARE_I2C_BUFF_LEN];
-        size_t size = _txBuff->available();
-
-        if(size > sizeof(buf)) {
-            LOG_E("data too long to transfer\n");
-            return 1;
-        }
-        for(size_t i = 0; i < size; i++) {
-            buf[i] = _txBuff->read_char();
-        }
-
-        rt_enter_critical();
-        if(0x00 != i2c_send_data(_i2cNum, buf, size)) {
-            ret = 6;
-        }
-        rt_exit_critical();
-
-        rt_mutex_release(_lock);
-    } else {
-        _nonStop = true;
-        _nonStopTask = rt_thread_self();
-    }
-
-    return ret;
-}
-
-size_t TwoWire::requestFrom(uint16_t address, size_t len, bool sendStop)
-{
-    if(_isSlave) {
-        LOG_W("Bus is Slave Mode\n");
-        return 0;
-    }
-    if(!_txBuff || !_rxBuff) {
-        LOG_W("NULL buffer pointer\n");
-        return 0;
-    }
-
-    uint8_t rxBuf[HARDWARE_I2C_BUFF_LEN];
-    size_t rxSize = len > HARDWARE_I2C_BUFF_LEN ? HARDWARE_I2C_BUFF_LEN : len;
-
-    if(_nonStop && _nonStopTask == rt_thread_self()) {
-        if(address != _txAddress){
-            LOG_D("Unfinished Repeated Start transaction! Expected address do not match! %u != %u", address, _txAddress);
-            return 0;
-        }
-        _nonStop = false;
-
-        uint8_t txBuf[HARDWARE_I2C_BUFF_LEN];
-        size_t txSize= _txBuff->available();
-        if(sizeof(txBuf) < txSize) {
-            LOG_E("data too long to transfer\n");
-            return 0;
-        }
-
-        for(size_t i = 0; i < txSize; i++) {
-            txBuf[i] = _txBuff->read_char();
-        }
-
-        rt_enter_critical();
-        if(0x00 != i2c_recv_data(_i2cNum, txBuf, txSize, rxBuf, rxSize)) {
-            rt_exit_critical();
-
-            rxSize = 0;
-            LOG_D("i2c nonStop read error\n");
-        } else {
-            rt_exit_critical();
-
-            _rxBuff->clear();
-            for(size_t i = 0; i < rxSize; i++) {
-                if(!_rxBuff->availableForStore()) {
-                    break;
-                }
-                _rxBuff->store_char(rxBuf[i]);
+    uint8_t status = 4;
+    if (phase_ == Collecting && address_ <= 1023) {
+        if (overflow_)
+            status = 1;
+        else if (!getWriteError() && txSize_) {
+            if (!stop) {
+                phase_ = CommandPending;
+                return 0;
             }
-        }
-    } else {
-        if((NULL == _lock) || (RT_EOK != rt_mutex_take(_lock, RT_WAITING_FOREVER))) {
-            LOG_E("could not acquire lock\n");
-            return 0;
-        }
-
-        if(0x00 != i2c_recv_data(_i2cNum, NULL, 0, rxBuf, rxSize)) {
-            rxSize = 0;
-            LOG_D("i2c nonStop read error\n");
-        } else {
-            _rxBuff->clear();
-            for(size_t i = 0; i < rxSize; i++) {
-                if(!_rxBuff->availableForStore()) {
-                    break;
-                }
-                _rxBuff->store_char(rxBuf[i]);
-            }
+            i2c_init(_i2cNum, address_, address_ > 127 ? 10 : 7, clock_);
+            status = transferStatus(i2c_send_data(_i2cNum, tx_, txSize_));
         }
     }
-
-    rt_mutex_release(_lock);
-
-    return rxSize;
+    // The SDK cannot issue an address-only probe; never report a false ACK.
+    cancel();
+    if (status)
+        setWriteError();
+    return status;
 }
-
-
-size_t TwoWire::requestFrom(uint8_t address, size_t len, bool sendStop)
+size_t TwoWire::receive(uint16_t address, size_t count, bool stop)
 {
-    return requestFrom(static_cast<uint16_t>(address), static_cast<size_t>(len), static_cast<bool>(sendStop));
-}
-  
-uint8_t TwoWire::requestFrom(uint8_t address, uint8_t len, uint8_t sendStop)
-{
-    return requestFrom(static_cast<uint16_t>(address), static_cast<size_t>(len), static_cast<bool>(sendStop));
-}
-
-uint8_t TwoWire::requestFrom(uint16_t address, uint8_t len, uint8_t sendStop)
-{
-    return requestFrom(address, static_cast<size_t>(len), static_cast<bool>(sendStop));
-}
-
-/* Added to match the Arduino function definition: https://github.com/arduino/ArduinoCore-API/blob/173e8eadced2ad32eeb93bcbd5c49f8d6a055ea6/api/TwoWire.h#L39
- * See: https://github.com/arduino-libraries/ArduinoECCX08/issues/25
-*/
-uint8_t TwoWire::requestFrom(uint16_t address, uint8_t len, bool sendStop)
-{
-    return requestFrom((uint16_t)address, (size_t)len, sendStop);
-}
-
-uint8_t TwoWire::requestFrom(uint8_t address, uint8_t len)
-{
-    return requestFrom(static_cast<uint16_t>(address), static_cast<size_t>(len), true);
-}
-
-uint8_t TwoWire::requestFrom(uint16_t address, uint8_t len)
-{
-    return requestFrom(address, static_cast<size_t>(len), true);
-}
-
-uint8_t TwoWire::requestFrom(int address, int len)
-{
-    return requestFrom(static_cast<uint16_t>(address), static_cast<size_t>(len), true);
-}
-
-uint8_t TwoWire::requestFrom(int address, int len, int sendStop)
-{
-    return static_cast<uint8_t>(requestFrom(static_cast<uint16_t>(address), static_cast<size_t>(len), static_cast<bool>(sendStop)));
-}
-
-void TwoWire::beginTransmission(int address)
-{
-    beginTransmission(static_cast<uint16_t>(address));
-}
-
-void TwoWire::beginTransmission(uint8_t address)
-{
-    beginTransmission(static_cast<uint16_t>(address));
-}
-
-uint8_t TwoWire::endTransmission(void)
-{
-    return endTransmission(true);
-}
-
-size_t TwoWire::write(uint8_t c)
-{
-    if((!_txBuff) || (_txBuff->isFull())) {
+    Lock lock(mutex_);
+    if (!lock || !accessible())
+        return 0;
+    rxSize_ = rxOffset_ = 0;
+    const bool valid    = stop && address <= 1023 && phase_ != Collecting && (phase_ != CommandPending || address == address_);
+    if (!valid || !count) {
+        if (!valid)
+            setWriteError();
+        cancel();
         return 0;
     }
-
-    _txBuff->store_char(c);
-
-    return 1;
+    if (count > sizeof(rx_))
+        count = sizeof(rx_);
+    i2c_init(_i2cNum, address, address > 127 ? 10 : 7, clock_);
+    // SDK receive does not clear an abort left by the preceding transaction.
+    (void)i2c[_i2cNum]->clr_tx_abrt;
+    // A deferred command and its read are submitted in one SDK operation.
+    const int result = i2c_recv_data(_i2cNum, tx_, txSize_, rx_, count);
+    cancel();
+    if (!result)
+        rxSize_ = count;
+    else
+        setWriteError();
+    return rxSize_;
 }
-
-size_t TwoWire::write(const uint8_t *buffer, size_t size)
+uint8_t TwoWire::requestFrom(int address, int count, int stop)
 {
-    for(size_t i = 0; i < size; i++) {
-        if(!write(buffer[i])) {
-            return i;
-        }
-    }
-    return size;
+    return receive(address < 0 || address > 1023 ? 1024 : address, count > 0 ? static_cast<size_t>(count) : 0, stop != 0);
 }
-
 int TwoWire::available()
 {
-    return _rxBuff->available();
+    Lock lock(mutex_);
+    return lock && accessible() ? static_cast<int>(rxSize_ - rxOffset_) : 0;
 }
-
-int TwoWire::read()
-{
-    return _rxBuff->read_char();
-}
-
 int TwoWire::peek()
 {
-    return _rxBuff->peek();
+    Lock lock(mutex_);
+    return lock && accessible() && rxOffset_ < rxSize_ ? rx_[rxOffset_] : -1;
 }
-
+int TwoWire::read()
+{
+    Lock lock(mutex_);
+    return lock && accessible() && rxOffset_ < rxSize_ ? rx_[rxOffset_++] : -1;
+}
 void TwoWire::flush()
 {
-    _txBuff->clear();
-    _rxBuff->clear();
-}
-
-// Slave Mode, on Master read
-void TwoWire::onRequest(void(*function)(void))
-{
-    user_onRequest = function;
-}
-
-// Slave Mode, on Master write
-void TwoWire::onReceive(void(*function)(int))
-{
-    user_onReceive = function;
-}
-
-void TwoWire::_on_event(i2c_event_t event)
-{
-    if(I2C_EV_START == event) {
-        _slaveTransmitting = true;
-    } else /* if(I2C_EV_STOP == event) */ {
-        _slaveTransmitting = false;
+    Lock lock(mutex_);
+    if (lock && accessible()) {
+        cancel();
+        rxSize_ = rxOffset_ = 0;
     }
-}
-
-void TwoWire::_on_receive(uint32_t data)
-{
-    if(_slaveTransmitting) {
-        _rxBuff->store_char((uint8_t)data);
-
-        if(user_onReceive) {
-            user_onReceive(1);
-        }
-    }
-}
-
-uint32_t TwoWire::_on_transmit(void)
-{
-    if(_slaveTransmitting) {
-        if(user_onRequest) {
-            user_onRequest();
-        }
-
-        return _txBuff->read_char();
-    }
-
-    return -1;
-}
-
-static int i2c_slave_irq(void *TwoWireInst)
-{
-    TwoWire *_i2cInst = reinterpret_cast<TwoWire *>(TwoWireInst); 
-
-    volatile i2c_t *i2c_adapter = i2c[_i2cInst->_i2cNum];
-
-    uint32_t status = i2c_adapter->intr_stat;
-
-    if (status & I2C_INTR_STAT_START_DET) {
-        _i2cInst->_on_event(I2C_EV_START);
-        readl(&i2c_adapter->clr_start_det);
-    }
-
-    if (status & I2C_INTR_STAT_STOP_DET) {
-        _i2cInst->_on_event(I2C_EV_STOP);
-        readl(&i2c_adapter->clr_stop_det);
-    }
-
-    if (status & I2C_INTR_STAT_RX_FULL) {
-        _i2cInst->_on_receive(i2c_adapter->data_cmd);
-    }
-
-    if (status & I2C_INTR_STAT_RD_REQ) {
-        i2c_adapter->data_cmd = _i2cInst->_on_transmit();
-        readl(&i2c_adapter->clr_rd_req);
-    }
-
-    return 0;
 }

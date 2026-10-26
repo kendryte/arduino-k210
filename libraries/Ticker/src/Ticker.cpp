@@ -1,69 +1,77 @@
-/* 
-  Ticker.cpp - esp32 library that calls functions periodically
-
-  Copyright (c) 2017 Bert Melis. All rights reserved.
-  
-  Based on the original work of:
-  Copyright (c) 2014 Ivan Grokhotkov. All rights reserved.
-  The original version is part of the esp8266 core for Arduino environment.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "Ticker.h"
+#include "rthw.h"
+#include "rtthread.h"
+#include <limits.h>
+#include <string.h>
 
-static int _timer_callback(void* ctx)
+uint32_t Ticker::milliseconds(float seconds)
 {
-    auto &_ticker = *reinterpret_cast<Ticker *>(ctx);
-    _ticker._callback((void *)_ticker._arg);
+    uint32_t bits;
+    memcpy(&bits, &seconds, sizeof(bits));
+    if ((bits & 0x7f800000U) == 0x7f800000U || seconds <= 0)
+        return 0;
+    const double value = static_cast<double>(seconds) * 1000;
+    return value >= UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(value);
+}
+void Ticker::schedule(uint32_t ms, bool repeat, std::function<void()> action)
+{
+    detach();
+    if (!ms || !action)
+        return;
+    action_               = std::make_shared<std::function<void()>>(std::move(action));
+    const rt_base_t level = rt_hw_interrupt_disable();
+    _timer                = hal_timer_get_free_chn();
+    if (_timer) {
+        // timer_init resets every channel's callback; enable only this clock here.
+        sysctl_clock_enable(static_cast<sysctl_clock_t>(SYSCTL_CLOCK_TIMER0 + _timer->dev.tim));
+        timer_set_enable(_timer->dev.tim, _timer->chn.tim, 0);
+        timer_set_interval(_timer->dev.tim, _timer->chn.tim, static_cast<size_t>(ms) * 1000000);
+        if (timer_irq_register(_timer->dev.tim, _timer->chn.tim, !repeat, 1, fired, this) == 0)
+            timer_set_enable(_timer->dev.tim, _timer->chn.tim, 1);
+        else {
+            hal_timer_release_chn(const_cast<timer_dev_chn_map_t*>(_timer));
+            _timer = nullptr;
+        }
+    }
+    rt_hw_interrupt_enable(level);
+    if (!_timer)
+        action_.reset();
+}
+void Ticker::detach()
+{
+    const rt_base_t level = rt_hw_interrupt_disable();
+    if (_timer) {
+        timer_set_enable(_timer->dev.tim, _timer->chn.tim, 0);
+        timer_irq_unregister(_timer->dev.tim, _timer->chn.tim);
+        hal_timer_release_chn(const_cast<timer_dev_chn_map_t*>(_timer));
+        _timer = nullptr;
+    }
+    action_.reset();
+    rt_hw_interrupt_enable(level);
+}
+bool Ticker::active()
+{
+    return _timer && timer_is_enable(_timer->dev.tim, _timer->chn.tim);
+}
+int Ticker::fired(void* context)
+{
+    auto* self = static_cast<Ticker*>(context);
+    // Keep the callable alive if its callback detaches or reattaches this ticker.
+    const auto action = self->action_;
+    if (action && *action)
+        (*action)();
     return 0;
 }
-
-Ticker::Ticker()
+void Ticker::_attach_ms(uint32_t ms, bool repeat, callback_with_arg_t cb, size_t arg)
 {
-  _timer = hal_timer_get_free_chn();
-
-  if(NULL == _timer) {
-    rt_kprintf("get free timer channel failed");
-    return;
-  }
-  timer_init(_timer->dev.tim);
-}
-
-Ticker::~Ticker() {
-  detach();
-}
-
-void Ticker::_attach_ms(uint32_t milliseconds, bool repeat, callback_with_arg_t callback, size_t arg) {
-  _arg = arg;
-  _callback = callback;
-
-  timer_set_interval(_timer->dev.tim, _timer->chn.tim, milliseconds * 1000000);
-  timer_irq_register(_timer->dev.tim, _timer->chn.tim, !repeat, 4, _timer_callback, this);
-  timer_set_enable(_timer->dev.tim, _timer->chn.tim, 1);
-}
-
-void Ticker::detach() {
-  if (_timer) {
-    timer_irq_unregister(_timer->dev.tim, _timer->chn.tim);
-    timer_set_enable(_timer->dev.tim, _timer->chn.tim, 0);
-    _timer = nullptr;
-  }
-}
-
-bool Ticker::active() {
-  if (!_timer) return false;
-  return timer_is_enable(_timer->dev.tim, _timer->chn.tim);
+    _callback = cb;
+    _arg      = arg;
+    if (cb)
+        schedule(ms, repeat, [cb, arg] { cb(reinterpret_cast<void*>(arg)); });
+    else
+        detach();
 }

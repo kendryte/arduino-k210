@@ -1,107 +1,75 @@
-/*
-  Ticker.h - esp32 library that calls functions periodically
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
-  Copyright (c) 2017 Bert Melis. All rights reserved.
-
-  Based on the original work of:
-  Copyright (c) 2014 Ivan Grokhotkov. All rights reserved.
-  The original version is part of the esp8266 core for Arduino environment.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
-#ifndef TICKER_H
-#define TICKER_H
-
+#pragma once
 #include "k210-hal.h"
+#include <functional>
+#include <memory>
 
-class Ticker
-{
+// Configure from a single task. Callbacks run in timer interrupt context.
+class Ticker {
 public:
-    Ticker();
-    ~Ticker();
-    typedef void (*callback_t)(void);
-    typedef void (*callback_with_arg_t)(void *);
-
-    void attach(float seconds, callback_t callback)
+    using callback_t          = void (*)();
+    using callback_with_arg_t = void (*)(void*);
+    Ticker()                  = default;
+    ~Ticker()
     {
-        _attach_ms(seconds * 1000, true, reinterpret_cast<callback_with_arg_t>(callback), 0);
+        detach();
     }
-
-    void attach_ms(uint32_t milliseconds, callback_t callback)
+    Ticker(const Ticker&) = delete;
+    Ticker& operator=(const Ticker&) = delete;
+    void    attach(float seconds, callback_t cb)
     {
-        _attach_ms(milliseconds, true, reinterpret_cast<callback_with_arg_t>(callback), 0);
+        attach_ms(milliseconds(seconds), cb);
     }
-
-    template <typename TArg>
-    void attach(float seconds, void (*callback)(TArg), TArg arg)
+    void once(float seconds, callback_t cb)
     {
-        static_assert(sizeof(TArg) <= sizeof(size_t), "attach() callback argument size must be <= 8 bytes");
-        // C-cast serves two purposes:
-        // static_cast for smaller integer types,
-        // reinterpret_cast + const_cast for pointer types
-        size_t _arg = (size_t)arg;
-        _attach_ms(seconds * 1000, true, reinterpret_cast<callback_with_arg_t>(callback), _arg);
+        once_ms(milliseconds(seconds), cb);
     }
-
-    template <typename TArg>
-    void attach_ms(uint32_t milliseconds, void (*callback)(TArg), TArg arg)
+    void attach_ms(uint32_t ms, callback_t cb)
     {
-        static_assert(sizeof(TArg) <= sizeof(size_t), "attach_ms() callback argument size must be <= 8 bytes");
-        size_t _arg = (size_t)arg;
-        _attach_ms(milliseconds, true, reinterpret_cast<callback_with_arg_t>(callback), _arg);
+        schedule(ms, true, cb);
     }
-
-    void once(float seconds, callback_t callback)
+    void once_ms(uint32_t ms, callback_t cb)
     {
-        _attach_ms(seconds * 1000, false, reinterpret_cast<callback_with_arg_t>(callback), 0);
+        schedule(ms, false, cb);
     }
-
-    void once_ms(uint32_t milliseconds, callback_t callback)
+    template <class T> void attach(float s, void (*cb)(T), T arg)
     {
-        _attach_ms(milliseconds, false, reinterpret_cast<callback_with_arg_t>(callback), 0);
+        attach_ms(milliseconds(s), cb, arg);
     }
-
-    template <typename TArg>
-    void once(float seconds, void (*callback)(TArg), TArg arg)
+    template <class T> void once(float s, void (*cb)(T), T arg)
     {
-        static_assert(sizeof(TArg) <= sizeof(size_t), "attach() callback argument size must be <= 8 bytes");
-        size_t _arg = (size_t)(arg);
-        _attach_ms(seconds * 1000, false, reinterpret_cast<callback_with_arg_t>(callback), _arg);
+        once_ms(milliseconds(s), cb, arg);
     }
-
-    template <typename TArg>
-    void once_ms(uint32_t milliseconds, void (*callback)(TArg), TArg arg)
+    template <class T> void attach_ms(uint32_t ms, void (*cb)(T), T arg)
     {
-        static_assert(sizeof(TArg) <= sizeof(size_t), "attach_ms() callback argument size must be <= 8 bytes");
-        size_t _arg = (size_t)(arg);
-        _attach_ms(milliseconds, false, reinterpret_cast<callback_with_arg_t>(callback), _arg);
+        if (cb)
+            schedule(ms, true, [cb, arg] { cb(arg); });
+        else
+            detach();
     }
-
+    template <class T> void once_ms(uint32_t ms, void (*cb)(T), T arg)
+    {
+        if (cb)
+            schedule(ms, false, [cb, arg] { cb(arg); });
+        else
+            detach();
+    }
     void detach();
     bool active();
-
-public:
-    size_t _arg;
-    callback_with_arg_t _callback;
-
-protected:
-    void _attach_ms(uint32_t milliseconds, bool repeat, callback_with_arg_t callback, size_t arg);
+    // Retained for source compatibility; typed overloads avoid function-pointer casts.
+    size_t              _arg      = 0;
+    callback_with_arg_t _callback = nullptr;
 
 protected:
-    const struct timer_dev_chn_map_t *_timer;
+    void                       _attach_ms(uint32_t ms, bool repeat, callback_with_arg_t cb, size_t arg);
+    const timer_dev_chn_map_t* _timer = nullptr;
+
+private:
+    std::shared_ptr<std::function<void()>> action_;
+    static uint32_t                        milliseconds(float seconds);
+    static int                             fired(void* context);
+    void                                   schedule(uint32_t ms, bool repeat, std::function<void()> action);
 };
-
-#endif // TICKER_H

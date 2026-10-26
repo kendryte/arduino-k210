@@ -1,434 +1,301 @@
-/*
-  Copyright (c) 2016 Arduino LLC.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-#define DBG_TAG "I2S"
-#define DBG_LVL DBG_WARNING
-#include "rtdbg.h"
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "I2S.h"
+#include "rthw.h"
+namespace {
+I2SClass* owners[3] = {};
+class InterruptGuard {
+    rt_base_t level_ = rt_hw_interrupt_disable();
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// I2SClass Public Fcuntions //////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// the device index and pins must map to the "COM" pads in Table 6-1 of the datasheet
-I2SClass::I2SClass(uint8_t deviceIndex, uint8_t clockGenerator, uint8_t sdPin, uint8_t sckPin, uint8_t fsPin)
-:_deviceIndex(deviceIndex)
-,_sdPin(sdPin)
-,_sckPin(sckPin)
-,_fsPin(fsPin)
-
-,_state(I2S_STATE_IDLE)
-,_dmaChannel(DMAC_CHANNEL_MAX)
-,_sampleRate(0)
-,_bitsPerSample(0)
-,_mode(I2S_PHILIPS_MODE)
-,_dmaTransferInProgress(false)
-
-,_onTransmitArg(NULL)
-,_onReceiveArg(NULL)
-,_onTransmit(NULL)
-,_onReceive(NULL)
-{
-
+public:
+    ~InterruptGuard()
+    {
+        rt_hw_interrupt_enable(level_);
+    }
+};
 }
-
-// the SCK and FS pins are driven as outputs using the sample rate
+I2SClass::I2SClass(uint8_t device, uint8_t clockGenerator, uint8_t sd, uint8_t sck, uint8_t fs)
+    : device_(device)
+    , clock_(clockGenerator)
+    , sd_(sd)
+    , sck_(sck)
+    , fs_(fs)
+{
+}
+int I2SClass::begin(int mode, int bitsPerSample)
+{
+    // This SDK configures master clocks only. Do not claim a successful slave setup.
+    (void)mode;
+    (void)bitsPerSample;
+    return -1;
+}
 int I2SClass::begin(int mode, long sampleRate, int bitsPerSample)
 {
-  // master mode (driving clock and frame select pins - output)
-  return begin(mode, sampleRate, bitsPerSample, true);
+    if (ready_ || device_ >= 3 || sampleRate <= 0 || sampleRate > 192000 || (bitsPerSample != 16 && bitsPerSample != 32)
+        || (mode != I2S_PHILIPS_MODE && mode != I2S_LEFT_JUSTIFIED_MODE && mode != I2S_RIGHT_JUSTIFIED_MODE)
+        || sd_ >= K210_IO_NUMS || sck_ >= K210_IO_NUMS || fs_ >= K210_IO_NUMS || sd_ == sck_ || sd_ == fs_ || sck_ == fs_)
+        return -1;
+    I2SClass* expected = nullptr;
+    if (!__atomic_compare_exchange_n(&owners[device_], &expected, this, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return -1;
+    buffer_.reset();
+    dma_ = buffer_.data() ? hal_dma_get_free_chn() : DMAC_CHANNEL_MAX;
+    if (dma_ == DMAC_CHANNEL_MAX) {
+        buffer_.end();
+        __atomic_store_n(&owners[device_], static_cast<I2SClass*>(nullptr), __ATOMIC_RELEASE);
+        return -1;
+    }
+    rate_      = sampleRate;
+    bits_      = bitsPerSample;
+    mode_      = mode;
+    direction_ = Idle;
+    busy_ = received_ = false;
+    ready_            = true;
+    (void)clock_; // Kept in the API; K210 uses its device clock divider.
+    return 0;
 }
-
-// the SCK and FS pins are inputs, other side controls sample rate
-__attribute__ ((unavailable ("K210 not support I2S Slave mode"))) int I2SClass::begin(int mode, int bitsPerSample)
+bool I2SClass::select(Direction direction)
 {
-  LOG_E("K210 not support I2S Slave Mode.");
-  return begin(mode, 16 * 1000, bitsPerSample, true); // default 16KHz samplerate.
+    if (!ready_ || (direction_ != Idle && direction_ != direction))
+        return false;
+    if (direction_ == direction)
+        return true;
+    direction_         = direction;
+    const auto device  = static_cast<i2s_device_number_t>(device_);
+    const int  routing = device_ * 11;
+    hal_fpioa_set_pin_func(sck_, static_cast<fpioa_function_t>(FUNC_I2S0_SCLK + routing));
+    hal_fpioa_set_pin_func(fs_, static_cast<fpioa_function_t>(FUNC_I2S0_WS + routing));
+    hal_fpioa_set_pin_func(
+        sd_, static_cast<fpioa_function_t>((direction == Sending ? FUNC_I2S0_OUT_D0 : FUNC_I2S0_IN_D0) + routing));
+    i2s_init(device, direction == Sending ? I2S_TRANSMITTER : I2S_RECEIVER, 3);
+    const auto width = bits_ == 16 ? RESOLUTION_16_BIT : RESOLUTION_32_BIT;
+    if (direction == Sending)
+        i2s_tx_channel_config(device, I2S_CHANNEL_0, width, SCLK_CYCLES_32, TRIGGER_LEVEL_4,
+                              static_cast<i2s_work_mode_t>(mode_));
+    else
+        i2s_rx_channel_config(device, I2S_CHANNEL_0, width, SCLK_CYCLES_32, TRIGGER_LEVEL_4,
+                              static_cast<i2s_work_mode_t>(mode_));
+    i2s_set_dma_divide_16(device, bits_ == 16);
+    i2s_set_sample_rate(device, rate_);
+    return true;
 }
-
-void I2SClass::end()
+void I2SClass::service()
 {
-  hal_dma_releas_chn(_dmaChannel);
-  _dmaChannel = DMAC_CHANNEL_MAX;
-
-  _doubleBuffer.end();
-
-  hal_fpioa_clr_pin_func(_sdPin);
-  hal_fpioa_clr_pin_func(_sckPin);
-  hal_fpioa_clr_pin_func(_fsPin);
+    if (!ready_ || busy_ || direction_ == Idle)
+        return;
+    i2s_data_t transfer = {};
+    transfer.mode       = direction_ == Sending ? I2S_TRANSMITTER : I2S_RECEIVER;
+    if (direction_ == Sending) {
+        const size_t count = buffer_.available();
+        // DMA transfers whole 32-bit words. Keep partial words for the next write.
+        if (!count || count % 4)
+            return;
+        buffer_.swap();
+        transfer.send.tx_channel = dma_;
+        transfer.send.tx_buf     = static_cast<uint32_t*>(buffer_.data());
+        transfer.send.tx_len     = count / 4;
+    } else {
+        if (received_) {
+            if (buffer_.available())
+                return; // Preserve unread samples; backpressure DMA.
+            buffer_.swap(buffer_.getSize());
+            received_ = false;
+        }
+        transfer.recv.rx_channel = dma_;
+        transfer.recv.rx_buf     = static_cast<uint32_t*>(buffer_.data());
+        transfer.recv.rx_len     = buffer_.getSize() / 4;
+    }
+    plic_interrupt_t interrupt = {};
+    interrupt.callback         = completed;
+    interrupt.ctx              = this;
+    interrupt.priority         = 1;
+    busy_                      = true;
+    i2s_handle_data_dma(static_cast<i2s_device_number_t>(device_), transfer, &interrupt);
 }
-
-// from Stream
 int I2SClass::available()
 {
-  return int(_doubleBuffer.available());
+    InterruptGuard guard;
+    if (!select(Receiving))
+        return 0;
+    service();
+    return buffer_.available();
 }
-
-union i2s_sample_t {
-  int16_t b16;
-  int32_t b32;
-};
-
-int I2SClass::read()
-{
-  i2s_sample_t sample;
-
-  sample.b32 = 0;
-
-  read(&sample, _bitsPerSample / 8);
-
-  if (_bitsPerSample == 32) {
-    return sample.b32;
-  } else if (_bitsPerSample == 16) {
-    return sample.b16;
-  } else {
-    return 0;
-  }
-  return 0;
-}
-
-int I2SClass::peek()
-{
-  i2s_sample_t sample;
-
-  sample.b32 = 0;
-
-  _doubleBuffer.peek(&sample, _bitsPerSample / 8);
-
-  if (_bitsPerSample == 32) {
-    return sample.b32;
-  } else if (_bitsPerSample == 16) {
-    return sample.b16;
-  } else {
-    return 0;
-  }
-  return 0;
-}
-
-void I2SClass::flush()
-{
-  _doubleBuffer.flush();
-}
-
-// from Print
-size_t I2SClass::write(uint8_t data)
-{
-  return write((int32_t)data);
-}
-
-size_t I2SClass::write(const uint8_t *buffer, size_t size)
-{
-  return write((const void*)buffer, size);
-}
-
 int I2SClass::availableForWrite()
 {
-  return _doubleBuffer.availableForWrite();
+    InterruptGuard guard;
+    if (!select(Sending))
+        return 0;
+    return buffer_.availableForWrite();
 }
-
-int I2SClass::read(void *buffer, size_t size)
+int I2SClass::read(void* output, size_t size)
 {
-  if (_state != I2S_STATE_RECEIVER) {
-    enableReceiver();
-  }
-
-  int read = _doubleBuffer.read(buffer, size);
-
-  if (_dmaTransferInProgress == false && _doubleBuffer.available() == 0) {
-    // no DMA transfer in progress, start a receive process
-    _dmaTransferInProgress = true;
-
-    // DMA.transfer(_dmaChannel, i2sd.data(_deviceIndex), _doubleBuffer.data(), _doubleBuffer.availableForWrite());
-    recvData();
-
-    // switch to the next buffer for user output (will be empty)
-    _doubleBuffer.swap();
-  }
-
-  return read;
+    if (!output)
+        return 0;
+    InterruptGuard guard;
+    if (!select(Receiving))
+        return 0;
+    service();
+    const int count = buffer_.read(output, size);
+    service();
+    return count;
 }
-
-size_t I2SClass::write(int data)
+int I2SClass::read()
 {
-  return write((uint32_t)data);
+    uint32_t     sample = 0;
+    const size_t width  = bits_ == 16 ? 2 : 4;
+    if (available() < static_cast<int>(width))
+        return -1;
+    if (read(&sample, width) != static_cast<int>(width))
+        return -1;
+    return bits_ == 16 ? static_cast<int16_t>(sample) : static_cast<int32_t>(sample);
 }
-
-size_t I2SClass::write(uint32_t data)
+int I2SClass::peek()
 {
-  return write((const void *)&data, 4);
+    InterruptGuard guard;
+    if (!select(Receiving))
+        return -1;
+    service();
+    const size_t width  = bits_ == 16 ? 2 : 4;
+    uint32_t     sample = 0;
+    if (buffer_.available() < width || buffer_.peek(&sample, width) != width)
+        return -1;
+    return bits_ == 16 ? static_cast<int16_t>(sample) : static_cast<int32_t>(sample);
 }
-
-size_t I2SClass::write(const void *buffer, size_t size)
+size_t I2SClass::write(const uint8_t* input, size_t size)
 {
-  if (_state != I2S_STATE_TRANSMITTER) {
-    enableTransmitter();
-  }
-
-  size_t written = _doubleBuffer.write(buffer, size);
-
-  if ((false == _dmaTransferInProgress)&& _doubleBuffer.available()) {
-    _dmaTransferInProgress = true;
-
-    sendData();
-    // switch to the next buffer for input
-    _doubleBuffer.swap();
-  }
-
-  return written;
+    return write(static_cast<const void*>(input), size);
 }
-
-void I2SClass::onTransmit(callback_with_arg_t cb, void *arg)
+size_t I2SClass::write(const void* input, size_t size)
 {
-  _onTransmit = cb;
-  _onTransmitArg = arg;
+    if (!input || !size)
+        return 0;
+    InterruptGuard guard;
+    if (!select(Sending))
+        return 0;
+    const size_t count = buffer_.write(input, size);
+    service();
+    return count;
 }
-
-void I2SClass::onReceive(callback_with_arg_t cb, void *arg)
+size_t I2SClass::write(uint8_t value)
 {
-  _onReceive = cb;
-  _onReceiveArg = arg;
+    return write(static_cast<uint32_t>(value));
 }
-
-void I2SClass::setBufferSize(int bufferSize)
+size_t I2SClass::write(int value)
 {
-  _doubleBuffer.setSize(bufferSize);
+    return write(static_cast<uint32_t>(value));
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// I2SClass Private Fcuntions /////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int I2SClass::begin(int mode, long sampleRate, int bitsPerSample, bool driveClock)
+size_t I2SClass::write(uint32_t value)
 {
-  if (_state != I2S_STATE_IDLE) {
-    LOG_E("I2s not in idle state");
-    return -1;
-  }
-
-  switch (mode) {
-    case I2S_PHILIPS_MODE:
-    case I2S_RIGHT_JUSTIFIED_MODE:
-    case I2S_LEFT_JUSTIFIED_MODE:
-
-      _mode = i2s_mode_t(mode);
-      break;
-
-    default:
-      // invalid mode
-      LOG_E("Unsupport mode %d", mode);
-      return -1;
-  }
-
-  switch (bitsPerSample) {
-    case 16:
-    case 32:
-      _bitsPerSample = bitsPerSample;
-      break;
-
-    default:
-      // invalid bits per sample
-      LOG_E("Unsupport bitsPerSample %d", bitsPerSample);
-      return -1;
-  }
-  _sampleRate = (uint32_t)sampleRate;
-
-  _dmaChannel = hal_dma_get_free_chn();
-
-  if(DMAC_CHANNEL_MAX == _dmaChannel) {
-    LOG_E("failed get free dma chn");
-    return -1;
-  }
-
-  _doubleBuffer.reset();
-
-  hal_fpioa_set_pin_func(_sckPin, fpioa_function_t(FUNC_I2S0_SCLK + _deviceIndex * 11));
-  hal_fpioa_set_pin_func(_fsPin, fpioa_function_t(FUNC_I2S0_WS + _deviceIndex * 11));
-
-  return 0;
+    return write(&value, bits_ == 16 ? 2 : 4);
 }
-
-void I2SClass::enableTransmitter()
+void I2SClass::flush()
 {
-  hal_fpioa_clr_pin_func(_sdPin);
-  hal_fpioa_set_pin_func(_sdPin, fpioa_function_t(FUNC_I2S0_OUT_D0 + _deviceIndex * 11));
-
-  i2s_init(i2s_device_number_t(_deviceIndex), I2S_TRANSMITTER, 0x03);
-
-  i2s_tx_channel_config(i2s_device_number_t(_deviceIndex), I2S_CHANNEL_0,
-                        (16 == _bitsPerSample) ? RESOLUTION_16_BIT : RESOLUTION_32_BIT,
-                        // (16 == _bitsPerSample) ? SCLK_CYCLES_16 : SCLK_CYCLES_32,
-                        SCLK_CYCLES_32,
-                        TRIGGER_LEVEL_4, i2s_work_mode_t(_mode));
-
-  i2s_set_sample_rate(i2s_device_number_t(_deviceIndex), _sampleRate);
-
-  if(16 == _bitsPerSample) {
-    i2s_set_dma_divide_16(i2s_device_number_t(_deviceIndex), 1);
-  } else {
-    i2s_set_dma_divide_16(i2s_device_number_t(_deviceIndex), 0);
-  }
-
-  flush();
-  _state = I2S_STATE_TRANSMITTER;
+    if (!ready_)
+        return;
+    if (direction_ == Receiving) {
+        InterruptGuard guard;
+        buffer_.flush();
+        service();
+        return;
+    }
+    const unsigned long started = millis();
+    for (;;) {
+        {
+            InterruptGuard guard;
+            const uint8_t  zero[3]   = {};
+            const size_t   remainder = buffer_.available() % 4;
+            if (remainder)
+                buffer_.write(zero, 4 - remainder);
+            service();
+            if (!busy_ && !buffer_.available())
+                break;
+        }
+        if (static_cast<unsigned long>(millis() - started) >= 1000) {
+            setWriteError();
+            break;
+        }
+        yield();
+    }
 }
-
-void I2SClass::enableReceiver()
+void I2SClass::end()
 {
-  hal_fpioa_clr_pin_func(_sdPin);
-  hal_fpioa_set_pin_func(_sdPin, fpioa_function_t(FUNC_I2S0_IN_D0 + _deviceIndex * 11));
-
-  i2s_init(i2s_device_number_t(_deviceIndex), I2S_RECEIVER, 0x03);
-
-  i2s_rx_channel_config(i2s_device_number_t(_deviceIndex), I2S_CHANNEL_0,
-                        (16 == _bitsPerSample) ? RESOLUTION_16_BIT : RESOLUTION_32_BIT,
-                        // (16 == _bitsPerSample) ? SCLK_CYCLES_16 : SCLK_CYCLES_32,
-                        SCLK_CYCLES_32,
-                        TRIGGER_LEVEL_4, i2s_work_mode_t(_mode));
-
-  i2s_set_sample_rate(i2s_device_number_t(_deviceIndex), _sampleRate);
-
-  if(16 == _bitsPerSample) {
-    i2s_set_dma_divide_16(i2s_device_number_t(_deviceIndex), 1);
-  } else {
-    i2s_set_dma_divide_16(i2s_device_number_t(_deviceIndex), 0);
-  }
-
-  flush();
-  _state = I2S_STATE_RECEIVER;
+    if (!ready_)
+        return;
+    if (direction_ == Sending)
+        flush();
+    InterruptGuard guard;
+    ready_ = false;
+    dmac_irq_unregister(dma_);
+    dmac_channel_disable(dma_);
+    dmac_wait_idle(dma_);
+    hal_dma_releas_chn(dma_);
+    dma_ = DMAC_CHANNEL_MAX;
+    if (direction_ != Idle) {
+        // Stop both data blocks and their clock before freeing DMA memory.
+        i2s[device_]->ier = 0;
+        hal_fpioa_clr_pin_func(sd_);
+        hal_fpioa_clr_pin_func(sck_);
+        hal_fpioa_clr_pin_func(fs_);
+    }
+    busy_ = received_ = false;
+    direction_        = Idle;
+    buffer_.end();
+    __atomic_store_n(&owners[device_], static_cast<I2SClass*>(nullptr), __ATOMIC_RELEASE);
 }
-
-static int i2s_dma_irq(void *ctx)
+int I2SClass::completed(void* context)
 {
-  I2SClass *i2s = reinterpret_cast<I2SClass *>(ctx);
-
-  i2s->_onTransferComplete();
-
-  return 0;
+    static_cast<I2SClass*>(context)->_onTransferComplete();
+    return 0;
 }
-
-void I2SClass::recvData(void)
+void I2SClass::_onTransferComplete()
 {
-#if 0
-  uint32_t *buff = (uint32_t *)_doubleBuffer.data();
-  size_t size = _doubleBuffer.availableForWrite() / (_bitsPerSample / 8) / 2;
-
-  i2s_receive_data_dma(i2s_device_number_t(_deviceIndex), buff, size, _dmaChannel);
-  
-  _dmaTransferInProgress = false;
-
-  if (_onReceive) {
-    _onReceive(_onReceiveArg);
-  }
-#else
-  i2s_data_t data;
-  plic_interrupt_t irq;
-
-  data.wait_dma_idle = true;
-  data.wait_dma_done = false;
-
-  data.mode = I2S_RECEIVER;
-
-  data.recv.rx_channel = _dmaChannel;
-  data.recv.rx_buf = (uint32_t *)_doubleBuffer.data();
-  data.recv.rx_len = _doubleBuffer.availableForWrite() / (_bitsPerSample / 8) / 2;
-
-  irq.callback = i2s_dma_irq;
-  irq.ctx = this;
-  irq.priority = 1;
-
-  if(data.recv.rx_len)
-    i2s_handle_data_dma(i2s_device_number_t(_deviceIndex), data, &irq);
-#endif
-}
-
-void I2SClass::sendData(void)
-{
-#if 0
-  uint32_t *buff = (uint32_t *)_doubleBuffer.data();
-  size_t size = _doubleBuffer.available() / (_bitsPerSample / 8) / 2;
-
-  i2s_send_data_dma(i2s_device_number_t(_deviceIndex), buff, size, _dmaChannel);
-
-  _dmaTransferInProgress = false;
-
-  if (_onTransmit) {
-    _onTransmit(_onTransmitArg);
-  }
-#else
-  i2s_data_t data;
-  plic_interrupt_t irq;
-
-  data.wait_dma_idle = true;
-  data.wait_dma_done = false;
-
-  data.mode = I2S_TRANSMITTER;
-
-  data.send.tx_channel = _dmaChannel;
-  data.send.tx_buf = (uint32_t *)_doubleBuffer.data();
-  data.send.tx_len = _doubleBuffer.available() / (_bitsPerSample / 8) / 2;
-
-  irq.callback = i2s_dma_irq;
-  irq.ctx = this;
-  irq.priority = 1;
-
-  if(data.send.tx_len)
-    i2s_handle_data_dma(i2s_device_number_t(_deviceIndex), data, &irq);
-#endif
-}
-
-void I2SClass::_onTransferComplete(void)
-{
-  if (_state == I2S_STATE_TRANSMITTER) {
-    // transmit complete
-
-    if (_doubleBuffer.available()) {
-      // output is available to transfer, start the DMA process for the current buffer
-
-      // DMA.transfer(_dmaChannel, _doubleBuffer.data(), i2sd.data(_deviceIndex), _doubleBuffer.available());
-      sendData();
-
-      // swap to the next user buffer for input
-      _doubleBuffer.swap();
+    if (!ready_)
+        return;
+    busy_     = false;
+    received_ = direction_ == Receiving;
+    service();
+    if (direction_ == Sending) {
+        if (tx_)
+            tx_(txArg_);
+        else if (txSimple_)
+            txSimple_();
     } else {
-      // no user data buffered to send
-      _dmaTransferInProgress = false;
+        if (rx_)
+            rx_(rxArg_);
+        else if (rxSimple_)
+            rxSimple_();
     }
-
-    // call the users transmit callback if provided
-    if (_onTransmit) {
-      _onTransmit(_onTransmitArg);
-    }
-  } else {
-    // receive complete
-
-    if (_doubleBuffer.available() == 0) {
-      // the user has read all the current input, start the DMA process to fill it again
-      // DMA.transfer(_dmaChannel, i2sd.data(_deviceIndex), _doubleBuffer.data(), _doubleBuffer.availableForWrite());
-      recvData();
-
-      // swap to the next buffer that has previously been filled, so that the user can read it
-      _doubleBuffer.swap(_doubleBuffer.availableForWrite());
-    } else {
-      // user has not read current data, no free buffer to transfer into
-      _dmaTransferInProgress = false;
-    }
-
-    // call the users receveive callback if provided
-    if (_onReceive) {
-      _onReceive(_onReceiveArg);
-    }
-  }
+}
+void I2SClass::setBufferSize(int size)
+{
+    if (!ready_)
+        buffer_.setSize(size);
+}
+void I2SClass::onTransmit(callback_with_arg_t cb, void* arg)
+{
+    InterruptGuard guard;
+    tx_       = cb;
+    txArg_    = arg;
+    txSimple_ = nullptr;
+}
+void I2SClass::onReceive(callback_with_arg_t cb, void* arg)
+{
+    InterruptGuard guard;
+    rx_       = cb;
+    rxArg_    = arg;
+    rxSimple_ = nullptr;
+}
+void I2SClass::onTransmit(callback_t cb)
+{
+    InterruptGuard guard;
+    txSimple_ = cb;
+    tx_       = nullptr;
+}
+void I2SClass::onReceive(callback_t cb)
+{
+    InterruptGuard guard;
+    rxSimple_ = cb;
+    rx_       = nullptr;
 }

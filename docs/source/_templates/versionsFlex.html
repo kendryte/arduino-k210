@@ -95,10 +95,12 @@
   </div>
   {%- endif %}
   <script>
-    document.querySelector('.rst-versions').addEventListener('click', function() {
-          var details = document.querySelector('.rst-versions');
+    var details = document.querySelector('.rst-versions');
+    if (details) {
+      details.addEventListener('click', function() {
           details.classList.toggle('shift-up');
       });
-      
+    }
+
   </script>
-  
+

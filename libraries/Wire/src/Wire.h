@@ -1,118 +1,135 @@
-/*
-  Copyright (c) 2016 Arduino LLC.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #pragma once
-
 #include "Arduino.h"
-#include <inttypes.h>
 #include "Stream.h"
-#include "RingBuffer.h"
+#include "k210_i2c.h"
 
-// namespace arduino {
+#define HARDWARE_I2C_BUFF_LEN 64
+using user_onRequest = void (*)(void);
+using user_onReceive = void (*)(uint8_t*, int);
 
-#define HARDWARE_I2C_BUFF_LEN   (64)
-
-typedef void(*user_onRequest)(void);
-typedef void(*user_onReceive)(uint8_t*, int);
-
-class TwoWire : public Stream
-{
-  protected:
-    uint32_t _clockFreq;
-
-    int8_t _sclPin, _sdaPin;
-
-    uint16_t _txAddress;
-
-    RingBufferN<HARDWARE_I2C_BUFF_LEN> *_txBuff, *_rxBuff;
-
-    bool _nonStop;
-    rt_thread_t _nonStopTask;
-    rt_mutex_t _lock;
-
-  private:
-    bool _initialized;
-    bool _isSlave;
-    bool _slaveTransmitting;
-    void (*user_onRequest)(void);
-    void (*user_onReceive)(int);
-
-  public:
-    // for slave irq access these methods.
-    i2c_device_number_t _i2cNum;
-    void _on_event(i2c_event_t event);
-    void _on_receive(uint32_t data);
-    uint32_t _on_transmit(void);
-
-    TwoWire(int busNum);
-    virtual ~TwoWire();
-
-    bool begin(int8_t sclPin, int8_t sdaPin, uint32_t freq = 100000);
-    bool begin(uint16_t address, int8_t sclPin, int8_t sdaPin, uint32_t freq);
-    // Explicit Overload for Arduino MainStream API compatibility
-    inline bool begin()
+// Master transactions use the permissive K210 SDK. Pin order is SCL, SDA.
+// One instance owns each hardware controller. A pending command belongs to the
+// task that called beginTransmission; other tasks fail until it is completed
+// or cancelled with flush(). Call begin/end/destruction with callers quiescent.
+class TwoWire : public Stream {
+public:
+    explicit TwoWire(int busNum);
+    ~TwoWire() override;
+    TwoWire(const TwoWire&) = delete;
+    TwoWire& operator=(const TwoWire&) = delete;
+    bool     begin(int8_t sclPin, int8_t sdaPin, uint32_t frequency = 100000);
+    bool     begin(uint16_t address, int8_t sclPin, int8_t sdaPin, uint32_t frequency);
+    bool     begin()
     {
-        return begin(-1, -1, static_cast<uint32_t>(0));
+        return begin(-1, -1, uint32_t(100000));
     }
-    inline bool begin(uint8_t addr)
+    bool begin(uint8_t address)
     {
-        return begin(addr, -1, -1, 0);
+        return begin(address, -1, -1, 100000);
     }
-    inline bool begin(int addr)
+    bool begin(int address)
     {
-        return begin(static_cast<uint8_t>(addr), -1, -1, 0);
+        return begin(uint16_t(address), -1, -1, 100000);
     }
     bool end();
-
-    void setClock(uint32_t freq);
-  
-    void beginTransmission(uint16_t address);
-    void beginTransmission(uint8_t address);
-    void beginTransmission(int address);
-
-    uint8_t endTransmission(bool sendStop);
-    uint8_t endTransmission(void);
-
-    size_t requestFrom(uint16_t address, size_t len, bool sendStop);
-    size_t requestFrom(uint8_t address, size_t len, bool sendStop);
-    uint8_t requestFrom(uint8_t address, uint8_t size, uint8_t sendStop);
-    uint8_t requestFrom(uint16_t address, uint8_t size, bool sendStop);
-    uint8_t requestFrom(uint16_t address, uint8_t size, uint8_t sendStop);
-    uint8_t requestFrom(uint8_t address, uint8_t size);
-    uint8_t requestFrom(uint16_t address, uint8_t size);
-    uint8_t requestFrom(int address, int size);
-    uint8_t requestFrom(int address, int size, int sendStop);
-
-    void onReceive(void(*)(int));
-    void onRequest(void(*)(void));
-
-    size_t write(uint8_t); 
-    size_t write(const uint8_t *buffer, size_t size);
+    void setClock(uint32_t frequency);
+    // Slave mode is unsupported. These compatibility hooks do not register IRQs.
+    void     onReceive(void (*)(int)) { }
+    void     onRequest(void (*)()) { }
+    void     _on_event(i2c_event_t) { }
+    void     _on_receive(uint32_t) { }
+    uint32_t _on_transmit()
+    {
+        return 0;
+    }
+    void beginTransmission(uint16_t address)
+    {
+        start(address);
+    }
+    void beginTransmission(uint8_t address)
+    {
+        start(address);
+    }
+    void beginTransmission(int address)
+    {
+        start(address < 0 || address > 1023 ? 1024 : address);
+    }
+    uint8_t endTransmission(bool stop = true);
+    size_t  requestFrom(uint16_t address, size_t count, bool stop)
+    {
+        return receive(address, count, stop);
+    }
+    size_t requestFrom(uint8_t address, size_t count, bool stop)
+    {
+        return receive(address, count, stop);
+    }
+    size_t requestFrom(uint16_t address, size_t count)
+    {
+        return receive(address, count, true);
+    }
+    size_t requestFrom(uint8_t address, size_t count)
+    {
+        return receive(address, count, true);
+    }
+    uint8_t requestFrom(uint8_t address, uint8_t count, uint8_t stop)
+    {
+        return receive(address, count, stop != 0);
+    }
+    uint8_t requestFrom(uint16_t address, uint8_t count, bool stop)
+    {
+        return receive(address, count, stop);
+    }
+    uint8_t requestFrom(uint16_t address, uint8_t count, uint8_t stop)
+    {
+        return receive(address, count, stop != 0);
+    }
+    uint8_t requestFrom(uint8_t address, uint8_t count)
+    {
+        return receive(address, count, true);
+    }
+    uint8_t requestFrom(uint16_t address, uint8_t count)
+    {
+        return receive(address, count, true);
+    }
+    uint8_t requestFrom(int address, int count)
+    {
+        return requestFrom(address, count, 1);
+    }
+    uint8_t requestFrom(int address, int count, bool stop)
+    {
+        return requestFrom(address, count, int(stop));
+    }
+    uint8_t requestFrom(int address, int count, int stop);
     using Print::write;
+    size_t write(uint8_t value) override
+    {
+        return write(&value, 1);
+    }
+    size_t                    write(const uint8_t* buffer, size_t count) override;
+    int                       available() override;
+    int                       peek() override;
+    int                       read() override;
+    void                      flush() override;
+    const i2c_device_number_t _i2cNum;
 
-    int available();
-    int read();
-    int peek();
-    void flush();
+private:
+    void        start(uint16_t address);
+    size_t      receive(uint16_t address, size_t count, bool stop);
+    bool        accessible() const;
+    void        cancel();
+    uint8_t     transferStatus(int sdkResult) const;
+    rt_mutex_t  mutex_ = nullptr;
+    rt_thread_t task_  = nullptr;
+    uint32_t    clock_ = 100000;
+    int8_t      scl_ = -1, sda_ = -1;
+    uint16_t    address_                   = 0;
+    uint8_t     tx_[HARDWARE_I2C_BUFF_LEN] = {}, rx_[HARDWARE_I2C_BUFF_LEN] = {};
+    size_t      txSize_ = 0, rxSize_ = 0, rxOffset_ = 0;
+    enum Phase { Idle, Collecting, CommandPending } phase_ = Idle;
+    bool ready_ = false, overflow_ = false;
 };
-
 extern TwoWire Wire;
-
-// }
-
-// using arduino::TwoWire;

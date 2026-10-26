@@ -1,40 +1,132 @@
-name: arduino-k210 core build and autotest, based on ESP32 Arduino CI
+name: CI and releases
 
 on:
   push:
-    branches:
-      - 'main'
-    paths-ignore:
-      - '.github/workflows/docs.yml'
-      - 'docs/**'
-
+    branches: [main]
+    tags: ['[0-9]*', 'v[0-9]*']
+    paths-ignore: ['docs/**', '.github/workflows/docs.yml']
   pull_request:
-    branches:
-      - 'main'
-    paths-ignore:
-      - '.github/workflows/docs.yml'
-      - 'docs/**'
+    branches: [main]
+    paths-ignore: ['docs/**', '.github/workflows/docs.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a release after the tests pass
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
-  group: build-${{github.event.pull_request.number || github.ref}}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  host:
+    name: Serial and release tests
+    # Match the runner-group allowlist for push.yml@refs/heads/main.
+    # Tags/releases and every PR use hosted Linux so branch restrictions cannot block releases.
+    runs-on: >-
+      ${{ fromJSON(
+        github.repository == 'kendryte/arduino-k210' &&
+        contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) &&
+        github.ref == 'refs/heads/main' &&
+        '["self-hosted", "macOS", "ARM64", "shenzhen_mac"]' || '["ubuntu-24.04"]'
+      ) }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-test-environment
+      - name: Test release packaging and publication
+        run: python -m unittest discover -s tests/release -v
+      - name: Test serial port selection without hardware
+        run: |
+          python -m pip install -r tests/requirements.txt
+          python -m pytest -c tests/serial/pytest.ini tests/serial -v
+      - name: Detect configured Canaan K1 on macOS
+        if: ${{ runner.os == 'macOS' }}
+        env:
+          K210_PORT_SERIAL_NUMBER: ${{ secrets.K210_PORT_SERIAL_NUMBER || vars.K210_PORT_SERIAL_NUMBER }}
+          K210_PORT_VID: ${{ secrets.K210_PORT_VID || vars.K210_PORT_VID || '0x1A86' }}
+          K210_PORT_PID: ${{ secrets.K210_PORT_PID || vars.K210_PORT_PID || '0x55D2' }}
+          K210_PORT: ${{ secrets.K210_PORT || vars.K210_PORT }}
+          K210_PORT_LOCATION: ${{ secrets.K210_PORT_LOCATION || vars.K210_PORT_LOCATION }}
+          K210_PORT_INTERFACE: ${{ secrets.K210_PORT_INTERFACE || vars.K210_PORT_INTERFACE }}
+        run: |
+          if [[ -z "$K210_PORT_SERIAL_NUMBER" ]]; then
+            echo "Board detection skipped: K210_PORT_SERIAL_NUMBER is not configured."
+            exit 0
+          fi
+          python tools/select_serial_port.py --board k1
 
   build-arduino:
-    name: Arduino Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # os: [ubuntu-latest, windows-latest, macOS-latest]
-        os: [ubuntu-latest]
-
+    name: Compile all bundled sketches (Canaan K1)
+    # Match the runner-group allowlist for push.yml@refs/heads/main.
+    # Tags/releases and every PR use hosted Linux so branch restrictions cannot block releases.
+    runs-on: >-
+      ${{ fromJSON(
+        github.repository == 'kendryte/arduino-k210' &&
+        contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) &&
+        github.ref == 'refs/heads/main' &&
+        '["self-hosted", "macOS", "ARM64", "shenzhen_mac"]' || '["ubuntu-24.04"]'
+      ) }}
+    timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-    - name: Build Sketches
-      run: |
-        bash ./tools/on-push.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-test-environment
+      - uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: '1.5.1'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/k210-ci/tools
+          key: k210-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package/package_k210_index.template.json') }}
+      - name: Install pinned compiler and Arduino libraries
+        run: python tools/ci_prepare.py --directory "$RUNNER_TEMP/k210-ci"
+      - name: Compile examples and hardware test sketches
+        run: >-
+          python tests/build_compat.py --config "$ARDUINO_CONFIG"
+          --toolchain "$K210_TOOLCHAIN" --output build/compat
+      - name: Add coverage summary
+        if: ${{ always() }}
+        run: |
+          if [[ -f build/compat/coverage.md ]]; then
+            cat build/compat/coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload build reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: k210-build-reports
+          path: |
+            build/compat/*.log
+            build/compat/*.json
+            build/compat/*.md
+          if-no-files-found: ignore
+          retention-days: 14
 
+  publish:
+    needs: [host, build-arduino]
+    if: >-
+      github.repository == 'kendryte/arduino-k210' &&
+      contains(fromJSON('["push", "release", "workflow_dispatch"]'), github.event_name) &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish) &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'release')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      source-ref: ${{ github.sha }}

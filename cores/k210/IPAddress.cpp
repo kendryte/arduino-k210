@@ -1,333 +1,225 @@
-/*
-  IPAddress.cpp - Base class that provides IPAddress
-  Copyright (c) 2011 Adrian McEwen.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "IPAddress.h"
 #include "Print.h"
+#include <stdio.h>
+#include <string.h>
 
-// using namespace arduino;
-
-IPAddress::IPAddress() : IPAddress(IPv4) {}
-
-IPAddress::IPAddress(IPType ip_type)
+namespace {
+bool parseV4(const char* text, uint8_t* output)
 {
-    _type = ip_type;
-    memset(_address.bytes, 0, sizeof(_address.bytes));
+    if (!text)
+        return false;
+    for (int octet = 0; octet < 4; ++octet) {
+        unsigned value = 0, digits = 0;
+        while (*text >= '0' && *text <= '9') {
+            value = value * 10 + (*text++ - '0');
+            if (++digits > 3 || value > 255)
+                return false;
+        }
+        if (!digits)
+            return false;
+        output[octet] = value;
+        if (octet != 3) {
+            if (*text++ != '.')
+                return false;
+        }
+    }
+    return *text == 0;
 }
-
-IPAddress::IPAddress(uint8_t first_octet, uint8_t second_octet, uint8_t third_octet, uint8_t fourth_octet)
+int hexValue(char ch)
 {
-    _type = IPv4;
-    memset(_address.bytes, 0, sizeof(_address.bytes));
-    _address.bytes[IPADDRESS_V4_BYTES_INDEX] = first_octet;
-    _address.bytes[IPADDRESS_V4_BYTES_INDEX + 1] = second_octet;
-    _address.bytes[IPADDRESS_V4_BYTES_INDEX + 2] = third_octet;
-    _address.bytes[IPADDRESS_V4_BYTES_INDEX + 3] = fourth_octet;
+    if (ch >= '0' && ch <= '9')
+        return ch - '0';
+    if (ch >= 'a' && ch <= 'f')
+        return ch - 'a' + 10;
+    if (ch >= 'A' && ch <= 'F')
+        return ch - 'A' + 10;
+    return -1;
 }
-
-IPAddress::IPAddress(uint8_t o1, uint8_t o2, uint8_t o3, uint8_t o4, uint8_t o5, uint8_t o6, uint8_t o7, uint8_t o8, uint8_t o9, uint8_t o10, uint8_t o11, uint8_t o12, uint8_t o13, uint8_t o14, uint8_t o15, uint8_t o16) {
-    _type = IPv6;
-    _address.bytes[0] = o1;
-    _address.bytes[1] = o2;
-    _address.bytes[2] = o3;
-    _address.bytes[3] = o4;
-    _address.bytes[4] = o5;
-    _address.bytes[5] = o6;
-    _address.bytes[6] = o7;
-    _address.bytes[7] = o8;
-    _address.bytes[8] = o9;
-    _address.bytes[9] = o10;
-    _address.bytes[10] = o11;
-    _address.bytes[11] = o12;
-    _address.bytes[12] = o13;
-    _address.bytes[13] = o14;
-    _address.bytes[14] = o15;
-    _address.bytes[15] = o16;
 }
-
+const IPAddress IN6ADDR_ANY(IPv6);
+const IPAddress INADDR_NONE(UINT32_C(0));
+IPAddress::IPAddress() = default;
+IPAddress::IPAddress(IPType family)
+    : family_(family)
+{
+}
+IPAddress::IPAddress(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{
+    bytes_[12] = a;
+    bytes_[13] = b;
+    bytes_[14] = c;
+    bytes_[15] = d;
+}
+IPAddress::IPAddress(uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f, uint8_t g, uint8_t h, uint8_t i,
+                     uint8_t j, uint8_t k, uint8_t l, uint8_t m, uint8_t n, uint8_t o, uint8_t p)
+    : bytes_ { a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p }
+    , family_(IPv6)
+{
+}
 IPAddress::IPAddress(uint32_t address)
 {
-    // IPv4 only
-    _type = IPv4;
-    memset(_address.bytes, 0, sizeof(_address.bytes));
-    _address.dword[IPADDRESS_V4_DWORD_INDEX] = address;
-
-    // NOTE on conversion/comparison and uint32_t:
-    // These conversions are host platform dependent.
-    // There is a defined integer representation of IPv4 addresses,
-    // based on network byte order (will be the value on big endian systems),
-    // e.g. http://2398766798 is the same as http://142.250.70.206,
-    // However on little endian systems the octets 0x83, 0xFA, 0x46, 0xCE,
-    // in that order, will form the integer (uint32_t) 3460758158 .
+    *this = address;
 }
-
-IPAddress::IPAddress(const uint8_t *address) : IPAddress(IPv4, address) {}
-
-IPAddress::IPAddress(IPType ip_type, const uint8_t *address)
+IPAddress::IPAddress(const uint8_t* address)
+    : IPAddress(IPv4, address)
 {
-    _type = ip_type;
-    if (ip_type == IPv4) {
-        memset(_address.bytes, 0, sizeof(_address.bytes));
-        memcpy(&_address.bytes[IPADDRESS_V4_BYTES_INDEX], address, sizeof(uint32_t));
-    } else {
-        memcpy(_address.bytes, address, sizeof(_address.bytes));
-    }
 }
-
-bool IPAddress::fromString(const char *address) {
-    if (!fromString4(address)) {
-        return fromString6(address);
-    }
-    return true;
-}
-
-bool IPAddress::fromString4(const char *address)
+IPAddress::IPAddress(IPType family, const uint8_t* address)
+    : family_(family)
 {
-    // TODO: add support for "a", "a.b", "a.b.c" formats
-
-    int16_t acc = -1; // Accumulator
-    uint8_t dots = 0;
-
-    memset(_address.bytes, 0, sizeof(_address.bytes));
-    while (*address)
-    {
-        char c = *address++;
-        if (c >= '0' && c <= '9')
-        {
-            acc = (acc < 0) ? (c - '0') : acc * 10 + (c - '0');
-            if (acc > 255) {
-                // Value out of [0..255] range
-                return false;
-            }
-        }
-        else if (c == '.')
-        {
-            if (dots == 3) {
-                // Too many dots (there must be 3 dots)
-                return false;
-            }
-            if (acc < 0) {
-                /* No value between dots, e.g. '1..' */
-                return false;
-            }
-            _address.bytes[IPADDRESS_V4_BYTES_INDEX + dots++] = acc;
-            acc = -1;
-        }
-        else
-        {
-            // Invalid char
-            return false;
-        }
-    }
-
-    if (dots != 3) {
-        // Too few dots (there must be 3 dots)
-        return false;
-    }
-    if (acc < 0) {
-        /* No value between dots, e.g. '1..' */
-        return false;
-    }
-    _address.bytes[IPADDRESS_V4_BYTES_INDEX + 3] = acc;
-    _type = IPv4;
-    return true;
+    if (address)
+        memcpy(raw_address(), address, family == IPv4 ? 4 : 16);
 }
-
-bool IPAddress::fromString6(const char *address) {
-    uint32_t acc = 0; // Accumulator
-    int colons = 0, double_colons = -1;
-
-    while (*address)
-    {
-        char c = tolower(*address++);
-        if (isalnum(c) && c <= 'f') {
-            if (c >= 'a')
-                c -= 'a' - '0' - 10;
-            acc = acc * 16 + (c - '0');
-            if (acc > 0xffff)
-                // Value out of range
-                return false;
-        }
-        else if (c == ':') {
-            if (*address == ':') {
-                if (double_colons >= 0) {
-                    // :: allowed once
-                    return false;
-                }
-                if (*address != '\0' && *(address + 1) == ':') {
-                    // ::: not allowed
-                    return false;
-                }
-                // remember location
-                double_colons = colons + !!acc;
-                address++;
-            } else if (*address == '\0') {
-                // can't end with a single colon
-                return false;
-            }
-            if (colons == 7)
-                // too many separators
-                return false;
-            _address.bytes[colons * 2] = acc >> 8;
-            _address.bytes[colons * 2 + 1] = acc & 0xff;
-            colons++;
-            acc = 0;
-        }
-        else
-            // Invalid char
-            return false;
-    }
-
-    if (double_colons == -1 && colons != 7) {
-        // Too few separators
-        return false;
-    }
-    if (double_colons > -1 && colons > 6) {
-        // Too many segments (double colon must be at least one zero field)
-        return false;
-    }
-    _address.bytes[colons * 2] = acc >> 8;
-    _address.bytes[colons * 2 + 1] = acc & 0xff;
-    colons++;
-
-    if (double_colons != -1) {
-        for (int i = colons * 2 - double_colons * 2 - 1; i >= 0; i--)
-            _address.bytes[16 - colons * 2 + double_colons * 2 + i] = _address.bytes[double_colons * 2 + i];
-        for (int i = double_colons * 2; i < 16 - colons * 2 + double_colons * 2; i++)
-            _address.bytes[i] = 0;
-    }
-
-    _type = IPv6;
-    return true;
-}
-
-IPAddress& IPAddress::operator=(const uint8_t *address)
-{
-    // IPv4 only conversion from byte pointer
-    _type = IPv4;
-    memset(_address.bytes, 0, sizeof(_address.bytes));
-    memcpy(&_address.bytes[IPADDRESS_V4_BYTES_INDEX], address, sizeof(uint32_t));
-    return *this;
-}
-
 IPAddress& IPAddress::operator=(uint32_t address)
 {
-    // IPv4 conversion
-    // See note on conversion/comparison and uint32_t
-    _type = IPv4;
-    memset(_address.bytes, 0, sizeof(_address.bytes));
-    _address.dword[IPADDRESS_V4_DWORD_INDEX] = address;
+    family_ = IPv4;
+    memset(bytes_, 0, 12);
+    memcpy(bytes_ + 12, &address, 4);
     return *this;
 }
-
-bool IPAddress::operator==(const IPAddress& addr) const {
-    return (addr._type == _type)
-        && (memcmp(addr._address.bytes, _address.bytes, sizeof(_address.bytes)) == 0);
-}
-
-bool IPAddress::operator==(const uint8_t* addr) const
+IPAddress& IPAddress::operator=(const uint8_t* address)
 {
-    // IPv4 only comparison to byte pointer
-    // Can't support IPv6 as we know our type, but not the length of the pointer
-    return _type == IPv4 && memcmp(addr, &_address.bytes[IPADDRESS_V4_BYTES_INDEX], sizeof(uint32_t)) == 0;
+    *this = IPAddress(address);
+    return *this;
 }
-
-uint8_t IPAddress::operator[](int index) const {
-    if (_type == IPv4) {
-        return _address.bytes[IPADDRESS_V4_BYTES_INDEX + index];
-    }
-    return _address.bytes[index];
-}
-
-uint8_t& IPAddress::operator[](int index) {
-    if (_type == IPv4) {
-        return _address.bytes[IPADDRESS_V4_BYTES_INDEX + index];
-    }
-    return _address.bytes[index];
-}
-
-size_t IPAddress::printTo(Print& p) const
+IPAddress::operator uint32_t() const
 {
-    size_t n = 0;
-
-    if (_type == IPv6) {
-        // IPv6 IETF canonical format: compress left-most longest run of two or more zero fields, lower case
-        int8_t longest_start = -1;
-        int8_t longest_length = 1;
-        int8_t current_start = -1;
-        int8_t current_length = 0;
-        for (int8_t f = 0; f < 8; f++) {
-            if (_address.bytes[f * 2] == 0 && _address.bytes[f * 2 + 1] == 0) {
-                if (current_start == -1) {
-                    current_start = f;
-                    current_length = 1;
-                } else {
-                    current_length++;
-                }
-                if (current_length > longest_length) {
-                    longest_start = current_start;
-                    longest_length = current_length;
-                }
-            } else {
-                current_start = -1;
-            }
-        }
-        for (int f = 0; f < 8; f++) {
-            if (f < longest_start || f >= longest_start + longest_length) {
-                uint8_t c1 = _address.bytes[f * 2] >> 4;
-                uint8_t c2 = _address.bytes[f * 2] & 0xf;
-                uint8_t c3 = _address.bytes[f * 2 + 1] >> 4;
-                uint8_t c4 = _address.bytes[f * 2 + 1] & 0xf;
-                if (c1 > 0) {
-                    n += p.print((char)(c1 < 10 ? '0' + c1 : 'a' + c1 - 10));
-                }
-                if (c1 > 0 || c2 > 0) {
-                    n += p.print((char)(c2 < 10 ? '0' + c2 : 'a' + c2 - 10));
-                }
-                if (c1 > 0 || c2 > 0 || c3 > 0) {
-                    n += p.print((char)(c3 < 10 ? '0' + c3 : 'a' + c3 - 10));
-                }
-                n += p.print((char)(c4 < 10 ? '0' + c4 : 'a' + c4 - 10));
-                if (f < 7) {
-                    n += p.print(':');
-                }
-            } else if (f == longest_start) {
-                if (longest_start == 0) {
-                    n += p.print(':');
-                }
-                n += p.print(':');
-            }
-        }
-        return n;
-    }
-
-    // IPv4
-    for (int i =0; i < 3; i++)
-    {
-        n += p.print(_address.bytes[IPADDRESS_V4_BYTES_INDEX + i], DEC);
-        n += p.print('.');
-    }
-    n += p.print(_address.bytes[IPADDRESS_V4_BYTES_INDEX + 3], DEC);
-    return n;
+    uint32_t value = 0;
+    if (family_ == IPv4)
+        memcpy(&value, bytes_ + 12, 4);
+    return value;
 }
-
-// const IPAddress arduino::IN6ADDR_ANY(IPv6);
-// const IPAddress arduino::INADDR_NONE(0,0,0,0);
-
-const IPAddress IN6ADDR_ANY(IPv6);
-const IPAddress INADDR_NONE(0,0,0,0);
+bool IPAddress::operator==(const IPAddress& other) const
+{
+    return family_ == other.family_ && memcmp(bytes_, other.bytes_, 16) == 0;
+}
+bool IPAddress::operator==(const uint8_t* address) const
+{
+    return address && family_ == IPv4 && memcmp(bytes_ + 12, address, 4) == 0;
+}
+uint8_t& IPAddress::operator[](int index)
+{
+    return raw_address()[index];
+}
+uint8_t IPAddress::operator[](int index) const
+{
+    return raw_address()[index];
+}
+bool IPAddress::fromString(const char* text)
+{
+    return text && (strchr(text, ':') ? fromString6(text) : fromString4(text));
+}
+bool IPAddress::fromString4(const char* text)
+{
+    uint8_t parsed[4];
+    if (!parseV4(text, parsed))
+        return false;
+    *this = IPAddress(parsed);
+    return true;
+}
+bool IPAddress::fromString6(const char* text)
+{
+    if (!text || !*text)
+        return false;
+    uint16_t    words[8] = {};
+    unsigned    count    = 0;
+    int         hole     = -1;
+    const char* cursor   = text;
+    if (*cursor == ':') {
+        if (cursor[1] != ':')
+            return false;
+        hole = 0;
+        cursor += 2;
+    }
+    while (*cursor) {
+        if (count == 8)
+            return false;
+        const char* start = cursor;
+        unsigned    value = 0, digits = 0;
+        while (hexValue(*cursor) >= 0) {
+            if (++digits > 4)
+                return false;
+            value = value * 16 + hexValue(*cursor++);
+        }
+        if (*cursor == '.') {
+            uint8_t v4[4];
+            if (count > 6 || !parseV4(start, v4))
+                return false;
+            words[count++] = (v4[0] << 8) | v4[1];
+            words[count++] = (v4[2] << 8) | v4[3];
+            cursor += strlen(cursor);
+            break;
+        }
+        if (!digits)
+            return false;
+        words[count++] = value;
+        if (!*cursor)
+            break;
+        if (*cursor++ != ':')
+            return false;
+        if (*cursor == ':') {
+            if (hole >= 0)
+                return false;
+            hole = count;
+            ++cursor;
+        } else if (!*cursor)
+            return false;
+    }
+    if (hole < 0 && count != 8)
+        return false;
+    if (hole >= 0) {
+        if (count >= 8)
+            return false;
+        const unsigned tail = count - hole;
+        memmove(words + 8 - tail, words + hole, tail * sizeof(uint16_t));
+        memset(words + hole, 0, (8 - count) * sizeof(uint16_t));
+    }
+    IPAddress parsed(IPv6);
+    for (unsigned i = 0; i < 8; ++i) {
+        parsed.bytes_[2 * i]     = words[i] >> 8;
+        parsed.bytes_[2 * i + 1] = words[i];
+    }
+    *this = parsed;
+    return true;
+}
+size_t IPAddress::printTo(Print& destination) const
+{
+    char text[48];
+    if (family_ == IPv4) {
+        const int length = snprintf(text, sizeof(text), "%u.%u.%u.%u", bytes_[12], bytes_[13], bytes_[14], bytes_[15]);
+        return destination.write(text, length);
+    }
+    unsigned best = 8, bestLength = 0;
+    for (unsigned i = 0; i < 8;) {
+        if (bytes_[2 * i] || bytes_[2 * i + 1]) {
+            ++i;
+            continue;
+        }
+        unsigned end = i;
+        while (end < 8 && !bytes_[2 * end] && !bytes_[2 * end + 1])
+            ++end;
+        if (end - i > bestLength && end - i >= 2) {
+            best       = i;
+            bestLength = end - i;
+        }
+        i = end;
+    }
+    size_t length = 0;
+    for (unsigned i = 0; i < 8;) {
+        if (i == best) {
+            text[length++] = ':';
+            text[length++] = ':';
+            i += bestLength;
+            continue;
+        }
+        if (length && text[length - 1] != ':')
+            text[length++] = ':';
+        length += snprintf(text + length, sizeof(text) - length, "%x", (bytes_[2 * i] << 8) | bytes_[2 * i + 1]);
+        ++i;
+    }
+    return destination.write(text, length);
+}

@@ -1,64 +1,66 @@
-name: arduino-k210 documents build and deploy
+name: Documentation
 
 on:
   push:
-    branches:
-      - 'main'
-    paths:
-      - 'docs/**'
-      - '.github/workflows/docs.yml'
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/docs.yml']
+  pull_request:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/docs.yml']
+  workflow_dispatch:
 
-  # pull_request:
-  #   branches:
-  #     - 'main'
-  #   paths:
-  #     - 'docs/**'
-  #     - '.github/workflows/docs.yml'
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
-# Allow one concurrent deployment
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Install Requirements.
-      run: pip3 install sphinx==5.3.0 sphinx-copybutton sphinx_multiversion sphinxcontrib-mermaid myst-parser sphinx-book-theme
-
-    - name: Build
-      run: |
-        git fetch --unshallow # fetch all history
-        cd docs && make mhtml
-        find build -type d -name ".doctrees" | xargs rm -rf
-        find build -type f -name ".buildinfo" | xargs rm -rf
-        find build -type f -name "objects.inv" | xargs rm -rf
-        cd -
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: 'docs/build'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - name: Install documentation dependencies
+        run: python -m pip install -r docs/requirements.txt
+      # Multiversion reads committed refs; build PR content directly for review.
+      - name: Check documentation
+        run: python -m sphinx -W --keep-going -b html docs/source docs/preview/main
+      - name: Build versioned documentation
+        if: ${{ github.event_name != 'pull_request' }}
+        run: make -C docs mhtml
+      - name: Remove build caches
+        if: ${{ github.event_name != 'pull_request' }}
+        run: find docs/build -type d -name .doctrees -prune -exec rm -rf {} +
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: ${{ github.event_name != 'pull_request' }}
+        with:
+          path: docs/build
 
   deploy:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.repository == 'kendryte/arduino-k210' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: build
-
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}/main
-
-    runs-on: ubuntu-latest
+      url: ${{ steps.deployment.outputs.page_url }}main/
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
