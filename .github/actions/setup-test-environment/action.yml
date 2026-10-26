@@ -1,0 +1,23 @@
+name: Set up test environment
+description: Use Homebrew Python on macOS and hosted Python on Linux.
+runs:
+  using: composite
+  steps:
+    - name: Set up hosted Python
+      if: ${{ runner.os != 'macOS' }}
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: '3.14'
+    - name: Set up macOS Python
+      if: ${{ runner.os == 'macOS' }}
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: '1'
+      run: |
+        if ! brew list --versions python@3.12 >/dev/null 2>&1; then
+          brew install python@3.12
+        fi
+        python_bin="$(brew --prefix python@3.12)/bin/python3.12"
+        "$python_bin" -m venv "$RUNNER_TEMP/k210-test-python"
+        echo "$RUNNER_TEMP/k210-test-python/bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/k210-test-python/bin/python" --version

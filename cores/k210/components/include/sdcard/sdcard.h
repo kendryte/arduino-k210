@@ -180,6 +180,7 @@ spisd_result_t spisd_write_block(uint32_t sector, const uint8_t *buffer);
 
 spisd_result_t spisd_read_multi_block_begin(uint32_t sector);
 spisd_result_t spisd_read_multi_block_read(uint8_t *buffer, uint32_t num_sectors);
+/* After a successful begin, always call end, even if read fails. */
 spisd_result_t spisd_read_multi_block_end(void);
 
 spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, uint32_t num_sectors);

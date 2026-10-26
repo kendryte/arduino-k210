@@ -38,6 +38,7 @@ typedef enum card_type_e {
 
 #define CMD_WAIT_RESP_TIMEOUT       (5000U)
 #define WAIT_IDLE_TIMEOUT           (50U)
+#define CARD_BUSY_TIMEOUT_MS        (500U)
 
 /* Private variables ---------------------------------------------------------*/
 static card_type_t _card_type;
@@ -108,17 +109,33 @@ static uint8_t _send_command_hold(uint8_t cmd, uint32_t arg, uint8_t crc) {
     uint8_t packet[] = {cmd | 0x40, arg >> 24, arg >> 16, arg >> 8, arg, crc};
     _io->write(packet, sizeof(packet));
 
+    /* CMD12 has a stuff byte before its R1 response; it can have any value. */
+    if (cmd == CMD12) {
+        _io->wr_rd_byte(DUMMY_BYTE);
+    }
+
     /* Wait response, quit till timeout */
     for (uint32_t i = 0; i < CMD_WAIT_RESP_TIMEOUT; i++) {
 
         uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
 
-        if (response != 0xFF) {
+        if ((response & 0x80) == 0) {
             return response;
         }
     }
 
     return 0xFF;
+}
+
+static spisd_result_t _wait_ready(void) {
+    rt_tick_t start = rt_tick_get();
+    rt_tick_t timeout = rt_tick_from_millisecond(CARD_BUSY_TIMEOUT_MS);
+    do {
+        if (_io->wr_rd_byte(DUMMY_BYTE) == DUMMY_BYTE) {
+            return SPISD_RESULT_OK;
+        }
+    } while ((rt_tick_t)(rt_tick_get() - start) < timeout);
+    return SPISD_RESULT_TIMEOUT;
 }
 
 static spisd_result_t _read_buffer(uint8_t *buff, uint32_t len) {
@@ -588,14 +605,7 @@ spisd_result_t spisd_write_block(uint32_t sector, const uint8_t *buffer) {
     uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
 
     if ((response & 0x1F) == 0x05) {
-
-        /* Wait all the data programm finished */
-        for (uint32_t i = 0; i < 0x40000; i++) {
-            if ( _io->wr_rd_byte(DUMMY_BYTE) != 0x00) {
-                ret = SPISD_RESULT_OK;
-                break;
-            }
-        }
+        ret = _wait_ready();
     }
 
     _io->relese();
@@ -629,8 +639,9 @@ spisd_result_t spisd_read_multi_block_read(uint8_t *buffer, uint32_t num_sectors
         spisd_result_t ret = _read_buffer(&buffer[i * BLOCK_SIZE], BLOCK_SIZE);
 
         if (ret != SPISD_RESULT_OK) {
-            /* Send stop data transmit command - CMD12    */
-            _send_command(CMD12, 0, 1);
+            /* The caller must stop the transfer, including on read failure. */
+            _io->relese();
+            _io->wr_rd_byte(DUMMY_BYTE);
             return SPISD_RESULT_ERROR;
         }
     }
@@ -641,12 +652,27 @@ spisd_result_t spisd_read_multi_block_read(uint8_t *buffer, uint32_t num_sectors
     return SPISD_RESULT_OK;
 }
 
+static spisd_result_t _stop_transmission(void) {
+
+    /* CMD12 returns R1b: keep CS asserted until the card finishes being busy. */
+    uint8_t response = _send_command_hold(CMD12, 0, 1);
+    spisd_result_t result = SPISD_RESULT_ERROR;
+    if (response == 0x00) {
+        result = _wait_ready();
+    } else if (response == DUMMY_BYTE) {
+        result = SPISD_RESULT_TIMEOUT;
+    }
+
+    _io->relese();
+    _io->wr_rd_byte(DUMMY_BYTE);
+    if (result != SPISD_RESULT_OK) {
+        LOG_E("CMD12 failed: response=0x%02x, result=%d", response, result);
+    }
+    return result;
+}
+
 spisd_result_t spisd_read_multi_block_end(void) {
-
-    /* Send stop data transmit command - CMD12 */
-    _send_command(CMD12, 0, 1);
-
-    return SPISD_RESULT_OK;
+    return _stop_transmission();
 }
 
 spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, uint32_t num_sectors) {
@@ -682,49 +708,33 @@ spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, u
         _io->wr_rd_byte(DUMMY_BYTE);
         _io->wr_rd_byte(DUMMY_BYTE);
 
-        /* MSD card accept the data */
-        if ((_io->wr_rd_byte(DUMMY_BYTE) & 0x1F) != 0x05) {
-            _io->relese();
-            _io->wr_rd_byte(DUMMY_BYTE);
+        uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
+        if ((response & 0x1F) != 0x05) {
+            LOG_E("SD write rejected: block=%lu, response=0x%02x", (unsigned long)i, response);
+            /* A rejected CMD25 data block must be aborted with CMD12. */
+            (void)_wait_ready();
+            (void)_stop_transmission();
             return SPISD_RESULT_ERROR;
         }
 
-        /* Wait all the data programm finished    */
-        uint32_t timeout = 0;
-
-        while (_io->wr_rd_byte(DUMMY_BYTE) != 0xFF) {
-            /* Timeout return */
-            if (timeout++ == 0x40000) {
-                _io->relese();
-                _io->wr_rd_byte(DUMMY_BYTE);
-                return SPISD_RESULT_ERROR;
-            }
+        spisd_result_t result = _wait_ready();
+        if (result != SPISD_RESULT_OK) {
+            LOG_E("SD write busy timeout: block=%lu", (unsigned long)i);
+            (void)_stop_transmission();
+            return result;
         }
     }
 
-    /* Send end of transmit token: 0xFD */
-    if (_io->wr_rd_byte(0xFD) != 0x00) {
-
-        _io->wr_rd_byte(DUMMY_BYTE);
-        _io->wr_rd_byte(DUMMY_BYTE);
-
-        /* Wait all the data programm finished */
-        for (uint32_t i = 0; i < 0x40000; i++) {
-            if (_io->wr_rd_byte(DUMMY_BYTE) == 0xFF) {
-                _io->relese();
-                _io->wr_rd_byte(DUMMY_BYTE);
-
-                for (uint32_t i = 0; i < 0x40000; i++) {
-                    if (_io->wr_rd_byte(DUMMY_BYTE) == 0xFF) {
-                        return SPISD_RESULT_OK;
-                    }
-                }
-            }
-        }
-    }
+    /* The byte received while sending Stop Tran is not an acknowledgement. */
+    _io->wr_rd_byte(0xFD);
+    /* Busy may start up to eight clocks after the stop token (NBR). */
+    _io->wr_rd_byte(DUMMY_BYTE);
+    spisd_result_t result = _wait_ready();
 
     _io->relese();
     _io->wr_rd_byte(DUMMY_BYTE);
-
-    return SPISD_RESULT_ERROR;
+    if (result != SPISD_RESULT_OK) {
+        LOG_E("SD write stop busy timeout");
+    }
+    return result;
 }

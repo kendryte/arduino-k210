@@ -1,10 +1,9 @@
 #include "FS.h"
 #include "FFat.h"
+#include <errno.h>
+#include <string.h>
 
 #include "unity/unity.h"
-
-// You only need to format FFat the first time you run a test
-#define FORMAT_FFAT true
 
 int listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -140,13 +139,15 @@ fail:
 int deleteFile(fs::FS &fs, const char *path)
 {
     Serial.printf("Deleting file: %s\r\n", path);
+    errno = 0;
     if (fs.remove(path))
     {
         Serial.println("- file deleted");
     }
     else
     {
-        Serial.println("- delete failed");
+        int error = errno;
+        Serial.printf("- delete failed: errno=%d (%s)\r\n", error, strerror(error));
         goto fail;
     }
     return 0;
@@ -159,69 +160,78 @@ int testFileIO(fs::FS &fs, const char *path)
 {
     Serial.printf("Testing file I/O with %s\r\n", path);
 
-    static uint8_t buf[512];
-    size_t len = 0;
+    uint8_t buf[512];
+    const size_t blocks = 64;
+    const size_t expectedSize = blocks * sizeof(buf);
     File file = fs.open(path, FILE_WRITE);
     if (!file)
     {
-        Serial.println("- failed to open file for writing");
+        int error = errno;
+        Serial.printf("- open for writing failed: errno=%d (%s)\r\n", error, strerror(error));
         return -1;
     }
 
-    size_t i;
-    Serial.print("- writing");
     uint32_t start = millis();
-    for (i = 0; i < 64; i++)
+    for (size_t i = 0; i < blocks; i++)
     {
-        if ((i & 0x001F) == 0x001F)
+        for (size_t j = 0; j < sizeof(buf); j++)
         {
-            Serial.print(".");
+            buf[j] = static_cast<uint8_t>(i + j);
         }
-        file.write(buf, 512);
+        errno = 0;
+        size_t written = file.write(buf, sizeof(buf));
+        if (written != sizeof(buf))
+        {
+            int error = errno;
+            Serial.printf("- short write at block %u: %u/%u bytes, errno=%d (%s)\r\n",
+                          (unsigned)i, (unsigned)written, (unsigned)sizeof(buf), error, strerror(error));
+            file.close();
+            return -1;
+        }
     }
-    Serial.println("");
-    uint32_t end = millis() - start;
-    Serial.printf(" - %u bytes written in %u ms\r\n", 64 * 512, end);
     file.close();
+    Serial.printf("- %u bytes written in %u ms\r\n", (unsigned)expectedSize, (unsigned)(millis() - start));
 
-    file = fs.open(path);
-    start = millis();
-    end = start;
-    i = 0;
-    if (file && !file.isDirectory())
+    file = fs.open(path, FILE_READ);
+    if (!file || file.isDirectory())
     {
-        len = file.size();
-        size_t flen = len;
-        start = millis();
-        Serial.print("- reading");
-        while (len)
-        {
-            size_t toRead = len;
-            if (toRead > 512)
-            {
-                toRead = 512;
-            }
-            file.read(buf, toRead);
-            if ((i++ & 0x001F) == 0x001F)
-            {
-                Serial.print(".");
-            }
-            len -= toRead;
-        }
-        Serial.println("");
-        end = millis() - start;
-        Serial.printf("- %ld bytes read in %u ms\r\n", flen, end);
+        int error = errno;
+        Serial.printf("- open for reading failed: errno=%d (%s)\r\n", error, strerror(error));
         file.close();
+        return -1;
     }
-    else
+    if (file.size() != expectedSize)
     {
-        Serial.println("- failed to open file for reading");
-        goto fail;
+        Serial.printf("- wrong file size: %u, expected %u\r\n", (unsigned)file.size(), (unsigned)expectedSize);
+        file.close();
+        return -1;
     }
-    return 0;
-fail:
+    start = millis();
+    for (size_t i = 0; i < blocks; i++)
+    {
+        errno = 0;
+        size_t count = file.read(buf, sizeof(buf));
+        if (count != sizeof(buf))
+        {
+            int error = errno;
+            Serial.printf("- short read at block %u: %u/%u bytes, errno=%d (%s)\r\n",
+                          (unsigned)i, (unsigned)count, (unsigned)sizeof(buf), error, strerror(error));
+            file.close();
+            return -1;
+        }
+        for (size_t j = 0; j < sizeof(buf); j++)
+        {
+            if (buf[j] != static_cast<uint8_t>(i + j))
+            {
+                Serial.printf("- data mismatch at block %u, byte %u\r\n", (unsigned)i, (unsigned)j);
+                file.close();
+                return -1;
+            }
+        }
+    }
     file.close();
-    return -1;
+    Serial.printf("- %u bytes verified in %u ms\r\n", (unsigned)expectedSize, (unsigned)(millis() - start));
+    return 0;
 }
 
 int fsInit(void)
@@ -273,8 +283,13 @@ void testrenameFile(void)
 
 void testtestFileIO(void)
 {
-    TEST_ASSERT_EQUAL(0, testFileIO(FFat, "/test.txt"));
-    TEST_ASSERT_EQUAL(0, deleteFile(FFat, "/test.txt"));
+    // Exercise consecutive read/delete/recreate operations without a delay.
+    for (size_t i = 0; i < 3; i++)
+    {
+        TEST_ASSERT_EQUAL(0, testFileIO(FFat, "/test.txt"));
+        TEST_ASSERT_EQUAL(0, deleteFile(FFat, "/test.txt"));
+        TEST_ASSERT_FALSE(FFat.exists("/test.txt"));
+    }
 }
 
 void testInit(void)

@@ -7,6 +7,7 @@ AlignConsecutiveAssignments: true
 # AlignConsecutiveBitFields: true
 AlignConsecutiveDeclarations: true
 AlignConsecutiveMacros: true
+AllowShortFunctionsOnASingleLine: Empty
 
 Standard: Auto
 IndentWidth: 4
