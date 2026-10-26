@@ -1,6 +1,6 @@
-Sphinx==8.2.3
+Sphinx==9.2.0
 sphinx-copybutton==0.5.2
 sphinx-multiversion==0.2.4
-sphinxcontrib-mermaid==1.0.0
-myst-parser==4.0.1
-sphinx-book-theme==1.1.4
+sphinxcontrib-mermaid==2.1.1
+myst-parser==5.1.0
+sphinx-book-theme==1.4.0
