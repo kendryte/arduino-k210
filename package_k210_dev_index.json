@@ -13,41 +13,11 @@
           "name": "K210",
           "architecture": "K210",
           "category": "Contributed",
-          "version": "0.9.91-dev.20261026110012.g64800f32c964",
-          "url": "https://github.com/kendryte/arduino-k210/releases/download/dev-20261026110012-64800f32c964/k210-0.9.91-dev.20261026110012.g64800f32c964.zip",
-          "archiveFileName": "k210-0.9.91-dev.20261026110012.g64800f32c964.zip",
-          "checksum": "SHA-256:2865cab1e5b3c486673062ded6d8743033556ad5c500ff88237a483f9cce56dc",
-          "size": "2375289",
-          "help": {
-            "online": ""
-          },
-          "boards": [
-            {
-              "name": "Canaan K1"
-            }
-          ],
-          "toolsDependencies": [
-            {
-              "packager": "Kendryte",
-              "name": "xpack-riscv-none-embed-gcc",
-              "version": "10.2.0-1.2"
-            },
-            {
-              "packager": "Kendryte",
-              "name": "kflash_py",
-              "version": "1.1.6"
-            }
-          ]
-        },
-        {
-          "name": "K210",
-          "architecture": "K210",
-          "category": "Contributed",
-          "version": "0.9.91-dev.20261026074615.g4dfdc1112e6b",
-          "url": "https://github.com/kendryte/arduino-k210/releases/download/dev-20261026074615-4dfdc1112e6b/k210-0.9.91-dev.20261026074615.g4dfdc1112e6b.zip",
-          "archiveFileName": "k210-0.9.91-dev.20261026074615.g4dfdc1112e6b.zip",
-          "checksum": "SHA-256:d2f8f7e8e0581a4adf55ec713095fdb0f38ac8a2da05943fecffbb07d4afff8f",
-          "size": "2374788",
+          "version": "0.9.91-dev.20261026115447.g2d674b8baeaa",
+          "url": "https://github.com/kendryte/arduino-k210/releases/download/dev-20261026115447-2d674b8baeaa/k210-0.9.91-dev.20261026115447.g2d674b8baeaa.zip",
+          "archiveFileName": "k210-0.9.91-dev.20261026115447.g2d674b8baeaa.zip",
+          "checksum": "SHA-256:6bb02194fe074e3c4ea5543b39b9d7d6c2db4909e873e2167856617214fcf0de",
+          "size": "2375291",
           "help": {
             "online": ""
           },
