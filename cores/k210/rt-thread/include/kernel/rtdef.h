@@ -46,6 +46,7 @@
  * 2022-06-29     Meco Man     add RT_USING_LIBC and standard libc headers
  * 2022-08-16     Meco Man     change version number to v5.0.0
  * 2022-09-12     Meco Man     define rt_ssize_t
+ * 2022-12-20     Meco Man     add const name for rt_object
  */
 
 #ifndef __RT_DEF_H__
@@ -124,6 +125,13 @@ typedef rt_base_t                       rt_flag_t;      /**< Type for flags */
 typedef rt_ubase_t                      rt_dev_t;       /**< Type for device */
 typedef rt_base_t                       rt_off_t;       /**< Type for offset */
 
+#if defined(RT_USING_STDC_ATOMIC)
+#include <stdatomic.h>
+typedef atomic_size_t rt_atomic_t;
+#else
+typedef volatile rt_base_t rt_atomic_t;
+#endif
+
 /* boolean type definitions */
 #define RT_TRUE                         1               /**< boolean true  */
 #define RT_FALSE                        0               /**< boolean fails */
@@ -156,6 +164,9 @@ typedef rt_base_t                       rt_off_t;       /**< Type for offset */
 /* Common Utilities */
 
 #define RT_UNUSED(x)                   ((void)x)
+
+/* compile time assertion */
+#define RT_CTASSERT(name, expn) typedef char _ct_assert_##name[(expn)?1:-1]
 
 /* Compiler Related Definitions */
 #if defined(__ARMCC_VERSION)           /* ARM Compiler */
@@ -355,7 +366,9 @@ typedef int (*init_fn_t)(void);
 #define RT_EIO                          8               /**< IO error */
 #define RT_EINTR                        9               /**< Interrupted system call */
 #define RT_EINVAL                       10              /**< Invalid argument */
-#define RT_ETRAP                        11              /**< trap event */
+#define RT_ETRAP                        11              /**< Trap event */
+#define RT_ENOENT                       12              /**< No entry */
+#define RT_ENOSPC                       13              /**< No space left */
 
 /**@}*/
 
@@ -412,21 +425,25 @@ typedef struct rt_slist_node rt_slist_t;                /**< Type for single lis
  */
 struct rt_object
 {
-    char       name[RT_NAME_MAX];                       /**< name of kernel object */
-    rt_uint8_t type;                                    /**< type of kernel object */
-    rt_uint8_t flag;                                    /**< flag of kernel object */
+#if RT_NAME_MAX > 0
+    char        name[RT_NAME_MAX];                       /**< dynamic name of kernel object */
+#else
+    const char *name;                                    /**< static name of kernel object */
+#endif /* RT_NAME_MAX > 0 */
+    rt_uint8_t  type;                                    /**< type of kernel object */
+    rt_uint8_t  flag;                                    /**< flag of kernel object */
 
 #ifdef RT_USING_MODULE
-    void      *module_id;                               /**< id of application module */
+    void      * module_id;                               /**< id of application module */
 #endif /* RT_USING_MODULE */
 
 #ifdef RT_USING_SMART
-    int       lwp_ref_count;                            /**< ref count for lwp */
+    int         lwp_ref_count;                           /**< ref count for lwp */
 #endif /* RT_USING_SMART */
 
-    rt_list_t  list;                                    /**< list node of kernel object */
+    rt_list_t   list;                                    /**< list node of kernel object */
 };
-typedef struct rt_object *rt_object_t;                  /**< Type for kernel objects. */
+typedef struct rt_object *rt_object_t;                   /**< Type for kernel objects. */
 
 /**
  *  The object type can be one of the follows with specific
@@ -563,6 +580,8 @@ typedef struct rt_timer *rt_timer_t;
 /**
  * @addtogroup Signal
  */
+/**@{*/
+
 #ifdef RT_USING_SIGNALS
 #include <sys/signal.h>
 typedef unsigned long rt_sigset_t;
@@ -725,7 +744,11 @@ struct rt_user_context
 struct rt_thread
 {
     /* rt object */
-    char        name[RT_NAME_MAX];                      /**< the name of thread */
+#if RT_NAME_MAX > 0
+    char        name[RT_NAME_MAX];                      /**< dynamic name of kernel object */
+#else
+    const char *name;                                   /**< static name of kernel object */
+#endif /* RT_NAME_MAX > 0 */
     rt_uint8_t  type;                                   /**< type of object */
     rt_uint8_t  flags;                                  /**< thread's flags */
 
@@ -768,7 +791,7 @@ struct rt_thread
     rt_uint8_t  number;
     rt_uint8_t  high_mask;
 #endif /* RT_THREAD_PRIORITY_MAX > 32 */
-    rt_uint32_t number_mask;
+    rt_uint32_t number_mask;                            /**< priority number mask */
 
 #ifdef RT_USING_MUTEX
     /* object for IPC */
@@ -1174,7 +1197,7 @@ enum rt_device_class_type
 /**
  * device control
  */
-#define RT_DEVICE_CTRL_BASE(Type)        (RT_Device_Class_##Type * 0x100)
+#define RT_DEVICE_CTRL_BASE(Type)        ((RT_Device_Class_##Type + 1) * 0x100)
 
 /**
  * special device commands
@@ -1204,8 +1227,8 @@ struct rt_device_ops
     rt_err_t  (*init)   (rt_device_t dev);
     rt_err_t  (*open)   (rt_device_t dev, rt_uint16_t oflag);
     rt_err_t  (*close)  (rt_device_t dev);
-    rt_size_t (*read)   (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
-    rt_size_t (*write)  (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
+    rt_ssize_t (*read)  (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
+    rt_ssize_t (*write) (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
     rt_err_t  (*control)(rt_device_t dev, int cmd, void *args);
 };
 #endif /* RT_USING_DEVICE_OPS */
@@ -1248,8 +1271,8 @@ struct rt_device
     rt_err_t  (*init)   (rt_device_t dev);
     rt_err_t  (*open)   (rt_device_t dev, rt_uint16_t oflag);
     rt_err_t  (*close)  (rt_device_t dev);
-    rt_size_t (*read)   (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
-    rt_size_t (*write)  (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
+    rt_ssize_t (*read)  (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
+    rt_ssize_t (*write) (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
     rt_err_t  (*control)(rt_device_t dev, int cmd, void *args);
 #endif /* RT_USING_DEVICE_OPS */
 
@@ -1277,8 +1300,8 @@ struct rt_driver
     rt_err_t  (*init)   (rt_device_t dev);
     rt_err_t  (*open)   (rt_device_t dev, rt_uint16_t oflag);
     rt_err_t  (*close)  (rt_device_t dev);
-    rt_size_t (*read)   (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
-    rt_size_t (*write)  (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
+    rt_ssize_t (*read)  (rt_device_t dev, rt_off_t pos, void *buffer, rt_size_t size);
+    rt_ssize_t (*write) (rt_device_t dev, rt_off_t pos, const void *buffer, rt_size_t size);
     rt_err_t  (*control)(rt_device_t dev, int cmd, void *args);
 #endif
     const struct filesystem_ops *fops;

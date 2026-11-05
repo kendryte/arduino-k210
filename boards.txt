@@ -156,3 +156,53 @@ dnk210.menu.enable_only_kmodel_v3.disable=Disable
 dnk210.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
 dnk210.menu.enable_only_kmodel_v3.enable=Enable
 dnk210.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1
+
+###############################################################
+k2.name=Canaan K2
+
+k2.upload.tool=kflash_py
+k2.upload.tool.default=kflash_py
+
+k2.upload.maximum_size=6291456
+k2.upload.maximum_data_size=6291456
+k2.upload.flags=
+k2.upload.extra_flags=
+
+k2.serial.disableDTR=true
+k2.serial.disableRTS=true
+
+k2.build.core=k210
+k2.build.variant=canaan_k2
+k2.build.board=CANAAN_K2
+k2.build.burn_board=dan
+
+k2.menu.clk_freq.400=400MHz
+k2.menu.clk_freq.500=500MHz
+k2.menu.clk_freq.600=600MHz
+k2.menu.clk_freq.400.build.f_cpu=400000000UL
+k2.menu.clk_freq.500.build.f_cpu=500000000UL
+k2.menu.clk_freq.600.build.f_cpu=600000000UL
+
+k2.menu.burn_baudrate.1000000=1 Mbps
+k2.menu.burn_baudrate.1500000=1.5 Mbps
+k2.menu.burn_baudrate.2000000=2 Mbps
+k2.menu.burn_baudrate.1000000.build.burn_baudrate=1000000
+k2.menu.burn_baudrate.1500000.build.burn_baudrate=1500000
+k2.menu.burn_baudrate.2000000.build.burn_baudrate=2000000
+
+k2.menu.enable_console.enable=Enable
+k2.menu.enable_console.enable.build.enable_console=1
+k2.menu.enable_console.disable=Disable
+k2.menu.enable_console.disable.build.enable_console=0
+
+k2.menu.stack_size.256K=256K
+k2.menu.stack_size.128K=128K
+k2.menu.stack_size.64K=64K
+k2.menu.stack_size.256K.build.main_stack_size=262144
+k2.menu.stack_size.128K.build.main_stack_size=131072
+k2.menu.stack_size.64K.build.main_stack_size=65536
+
+k2.menu.enable_only_kmodel_v3.disable=Disable
+k2.menu.enable_only_kmodel_v3.disable.build.only_kmodel_v3=0
+k2.menu.enable_only_kmodel_v3.enable=Enable
+k2.menu.enable_only_kmodel_v3.enable.build.only_kmodel_v3=1

@@ -15,7 +15,7 @@ public:
     static int begin(camera_pins_t &pins, uint32_t xclkFreqMhz, int width, int height, camera_buffers_t *buff);
     static void end();
 
-    static int capture(uint32_t timeout_ms = 200);
+    static int capture(uint32_t timeout_ms = 200, bool convert_display_order = true);
 
     static void get_buffers(camera_buffers_t *buff) {
         memcpy((uint8_t *)buff, (uint8_t *)&_buff, sizeof(camera_buffers_t));

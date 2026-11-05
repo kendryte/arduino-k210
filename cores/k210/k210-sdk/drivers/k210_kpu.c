@@ -1500,7 +1500,7 @@ int kpu_load_kmodel(kpu_model_context_t *ctx, const uint8_t *buffer)
     {
 #if ONLY_KMODEL_V3
         rt_kprintf("Only support Kmodel V3\n");
-        return -1
+        return -1;
 #else
         return nncase_load_kmodel(ctx, buffer);
 #endif // ONLY_KMODEL_V3
@@ -1762,7 +1762,7 @@ int kpu_run_kmodel(kpu_model_context_t *ctx, const uint8_t *src, dmac_channel_nu
 #if ONLY_KMODEL_V3
     {
         rt_kprintf("Only support Kmodel V3\n");
-        return; 
+        return -1; 
     }
 #else
         return nncase_run_kmodel(ctx, src, dma_ch, done_callback, userdata);

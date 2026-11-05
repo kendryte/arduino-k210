@@ -121,11 +121,14 @@ DRESULT disk_read (
 	switch (pdrv) {
 	case DEV_SDCARD :
 		// translate the arguments here
-		result  = spisd_read_multi_block_begin(sector);
-		result += spisd_read_multi_block_read(buff, count);
-		result += spisd_read_multi_block_end();
-
-		res = cvt_result(result);
+		result = spisd_read_multi_block_begin(sector);
+		if (result != SPISD_RESULT_OK) {
+			return cvt_result(result);
+		}
+		result = spisd_read_multi_block_read(buff, count);
+		/* Stop exactly once, including after a failed read. */
+		spisd_result_t stop_result = spisd_read_multi_block_end();
+		res = cvt_result(result != SPISD_RESULT_OK ? result : stop_result);
 
 		return res;
 	}

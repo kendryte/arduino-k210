@@ -36,8 +36,9 @@ typedef enum card_type_e {
 #define CMD58                       58      /* Read OCR */
 #define CMD59                       59      /* CRC disable/enbale, should return 0x00 */
 
-#define CMD_WAIT_RESP_TIMEOUT       (100U)
+#define CMD_WAIT_RESP_TIMEOUT       (5000U)
 #define WAIT_IDLE_TIMEOUT           (50U)
+#define CARD_BUSY_TIMEOUT_MS        (500U)
 
 /* Private variables ---------------------------------------------------------*/
 static card_type_t _card_type;
@@ -108,12 +109,17 @@ static uint8_t _send_command_hold(uint8_t cmd, uint32_t arg, uint8_t crc) {
     uint8_t packet[] = {cmd | 0x40, arg >> 24, arg >> 16, arg >> 8, arg, crc};
     _io->write(packet, sizeof(packet));
 
+    /* CMD12 has a stuff byte before its R1 response; it can have any value. */
+    if (cmd == CMD12) {
+        _io->wr_rd_byte(DUMMY_BYTE);
+    }
+
     /* Wait response, quit till timeout */
-    for (uint32_t i = 0; i < 200; i++) {
+    for (uint32_t i = 0; i < CMD_WAIT_RESP_TIMEOUT; i++) {
 
         uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
 
-        if (response != 0xFF) {
+        if ((response & 0x80) == 0) {
             return response;
         }
     }
@@ -121,12 +127,23 @@ static uint8_t _send_command_hold(uint8_t cmd, uint32_t arg, uint8_t crc) {
     return 0xFF;
 }
 
+static spisd_result_t _wait_ready(void) {
+    rt_tick_t start = rt_tick_get();
+    rt_tick_t timeout = rt_tick_from_millisecond(CARD_BUSY_TIMEOUT_MS);
+    do {
+        if (_io->wr_rd_byte(DUMMY_BYTE) == DUMMY_BYTE) {
+            return SPISD_RESULT_OK;
+        }
+    } while ((rt_tick_t)(rt_tick_get() - start) < timeout);
+    return SPISD_RESULT_TIMEOUT;
+}
+
 static spisd_result_t _read_buffer(uint8_t *buff, uint32_t len) {
 
     uint8_t response = 0;
 
     /* Wait start-token 0xFE */
-    for (uint32_t i = 0; i < 2000; i++) {
+    for (uint32_t i = 0; i < CMD_WAIT_RESP_TIMEOUT; i++) {
         response = _io->wr_rd_byte(DUMMY_BYTE);
 
         if (response == 0xFE) {
@@ -135,7 +152,6 @@ static spisd_result_t _read_buffer(uint8_t *buff, uint32_t len) {
     }
 
     if (response != 0xFE) {
-
         return SPISD_RESULT_ERROR;
     }
 
@@ -191,14 +207,14 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
         if (buff[2] == 0x01 && buff[3] == 0xAA) {
 
             for (uint32_t i = 0; i < 0xFFF; i++) {
-                response = _send_command(CMD55, 0, 0);            /* should be return 0x01 */
+                response = _send_command(CMD55, 0, 1);            /* should be return 0x01 */
 
                 if (response != 0x01) {
                     LOG_E("Send CMD55 should return 0x01, response=0x%02x\r\n", response);
                     return SPISD_RESULT_TIMEOUT;
                 }
 
-                response = _send_command(ACMD41, 0x40000000, 0);    /* should be return 0x00 */
+                response = _send_command(ACMD41, 0x40000000, 1);    /* should be return 0x00 */
 
                 if (response == 0x00) {
                     break;
@@ -211,7 +227,7 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
             }
 
             /* Read OCR by CMD58 */
-            response = _send_command_recv_response(CMD58, 0, 0, buff, sizeof(buff));
+            response = _send_command_recv_response(CMD58, 0, 1, buff, sizeof(buff));
 
             if (response != 0x00) {
                 LOG_E("Send CMD58 should return 0x00, response=0x%02x\r\n", response);
@@ -242,14 +258,14 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
         /* SD1.0/MMC start initialize */
         /* Send CMD55+ACMD41, No-response is a MMC card, otherwise is a SD1.0 card */
         for (uint32_t i = 0; i < 0xFFF; i++) {
-            response = _send_command(CMD55, 0, 0);
+            response = _send_command(CMD55, 0, 1);
 
             if (response != 0x01) {
                 LOG_E("Send CMD55 should return 0x01, response=0x%02x\r\n", response);
                 return SPISD_RESULT_TIMEOUT;
             }
 
-            response = _send_command(ACMD41, 0, 0);
+            response = _send_command(ACMD41, 0, 1);
 
             if (response == 0x00) {
                 break;
@@ -259,7 +275,7 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
         /* MMC card initialize start */
         if (response != 0x00) {
             for (uint32_t i = 0; i < 0xFFF; i++) {
-                response = _send_command(CMD1, 0, 0);
+                response = _send_command(CMD1, 0, 1);
 
                 if (response == 0x00) {
                     break;
@@ -290,7 +306,7 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
         }
 
         /* Set the block size */
-        response = _send_command(CMD16, BLOCK_SIZE, 0xFF);
+        response = _send_command(CMD16, BLOCK_SIZE, 1);
 
         if (response != 0x00) {
             LOG_E("Send CMD16 should return 0x00, response=0x%02x\r\n", response);
@@ -306,34 +322,71 @@ spisd_result_t spisd_init(spisd_interface_t const *const io, int8_t sck, int8_t 
 }
 
 int spisd_get_card_info(spisd_info_t *cardinfo) {
+    uint8_t temp[16];
+    uint8_t debug_buf[8] = {0};
 
+    (void)debug_buf;
+    
     _io->wr_rd_byte(DUMMY_BYTE);
 
     /* Send CMD9, Read CSD */
-    uint8_t response = _send_command(CMD9, 0, 0xFF);
+    uint8_t response = _send_command_hold(CMD9, 0, 0xFF);
 
     if (response != 0x00) {
+        _io->relese();
+        _io->wr_rd_byte(DUMMY_BYTE);
+
+        rt_kprintf("CMD9 failed, response=0x%02x\r\n", response);
         return response;
     }
 
-    uint8_t temp[16];
+    uint8_t data_token = 0xFF;
+    uint32_t timeout = CMD_WAIT_RESP_TIMEOUT * 2; // 给数据token更多时间
+    
+    for (uint32_t i = 0; i < timeout; i++) {
+        data_token = _io->wr_rd_byte(DUMMY_BYTE);
+        if (data_token == 0xFE) {
+            break;
+        }
+    }
 
-    _io->select();
+    if (data_token != 0xFE) {
+        _io->relese();
+        _io->wr_rd_byte(DUMMY_BYTE);
 
-    spisd_result_t ret = _read_buffer(temp, sizeof(temp));
+        rt_kprintf("Wait for 0xFE timeout, got=0x%02x\r\n", data_token);
+
+        /* 调试：读取接下来的几个字节看看 */
+        _io->select();
+
+        for (int j = 0; j < 8; j++) {
+            debug_buf[j] = _io->wr_rd_byte(DUMMY_BYTE);
+
+            LOG_D("Extra byte %d: 0x%02X", j, debug_buf[j]);
+        }
+
+        _io->relese();
+        _io->wr_rd_byte(DUMMY_BYTE);
+
+        return 1;
+    }
+
+    /* 读取CSD数据 (16字节) */
+    _io->read(temp, 16);
+    
+    /* 读取并丢弃CRC (2字节) */
+    _io->wr_rd_byte(DUMMY_BYTE);
+    _io->wr_rd_byte(DUMMY_BYTE);
+
     /* chip disable and dummy byte */
     _io->relese();
     _io->wr_rd_byte(DUMMY_BYTE);
 
-    if (ret != SPISD_RESULT_OK) {
-        return 1;
-    }
-
-    rt_kprintf(DBG_TAG" CSD:");
+    rt_kputs(DBG_TAG" CSD:");
     for(int i = 0; i < 16; i++) {
         rt_kprintf("%02X", temp[i]);
     }
-    rt_kprintf("\r\n");
+    rt_kputs("\r\n");
 
     cardinfo->card_type = _card_type;
 
@@ -410,30 +463,59 @@ int spisd_get_card_info(spisd_info_t *cardinfo) {
         cardinfo->capacity = (uint64_t)((uint64_t)(cardinfo->csd.DeviceSize + 1) * (uint64_t)cardinfo->block_size /* BLOCK_SIZE */ * (uint64_t)1024);
     }
 
-    /* Send CMD10, Read CID */
-    response = _send_command(CMD10, 0, 0xFF);
+    _io->wr_rd_byte(DUMMY_BYTE);
+    
+    /* 使用 _send_command_hold 发送CMD10 */
+    response = _send_command_hold(CMD10, 0, 1);
 
     if (response != 0x00) {
+        _io->relese();
+        _io->wr_rd_byte(DUMMY_BYTE);
+
+        rt_kprintf("CMD10 failed, response=0x%02x\r\n", response);
+
         return response;
     }
 
+    /* 等待数据开始token 0xFE */
+    data_token = 0xFF;
 
-    _io->select();
-    ret = _read_buffer(temp, sizeof(temp));
+    for (uint32_t i = 0; i < timeout; i++) {
+        data_token = _io->wr_rd_byte(DUMMY_BYTE);
+        if (data_token == 0xFE) {
+            LOG_D("Found CID 0xFE data token at attempt %lu", i);
+            break;
+        }
+    }
+
+    if (data_token != 0xFE) {
+        _io->relese();
+        _io->wr_rd_byte(DUMMY_BYTE);
+
+        rt_kprintf("CID: Wait for 0xFE timeout, got=0x%02x\r\n", data_token);
+
+        return 2;
+    }
+    
+    /* 读取CID数据 (16字节) */
+    _io->read(temp, 16);
+    
+    /* 读取并丢弃CRC (2字节) */
+    _io->wr_rd_byte(DUMMY_BYTE);
+    _io->wr_rd_byte(DUMMY_BYTE);
+    
     /* chip disable and dummy byte */
     _io->relese();
     _io->wr_rd_byte(DUMMY_BYTE);
 
-    if (ret != SPISD_RESULT_OK) {
-        return 2;
-    }
-
-    rt_kprintf(DBG_TAG" CID:");
+    /* 打印CID原始数据 */
+    rt_kputs(DBG_TAG" CID:");
     for(int i = 0; i < 16; i++) {
         rt_kprintf("%02X", temp[i]);
     }
-    rt_kprintf("\r\n");
+    rt_kputs("\r\n");
 
+    /* ========== 解析CID数据 ========== */
     /* Byte 0 */
     cardinfo->cid.ManufacturerID = temp[0];
     /* Byte 1 */
@@ -481,7 +563,7 @@ spisd_result_t spisd_read_block(uint32_t sector, uint8_t *buffer) {
 
     spisd_result_t ret = SPISD_RESULT_ERROR;
 
-    if (_send_command_hold(CMD17, sector, 0) == 0x00) {
+    if (_send_command_hold(CMD17, sector, 1) == 0x00) {
 
         ret = _read_buffer(buffer, BLOCK_SIZE);
     }
@@ -500,7 +582,7 @@ spisd_result_t spisd_write_block(uint32_t sector, const uint8_t *buffer) {
         sector = sector << 9;
     }
 
-    if (_send_command(CMD24, sector, 0) != 0x00) {
+    if (_send_command(CMD24, sector, 1) != 0x00) {
         return ret;
     }
 
@@ -523,14 +605,7 @@ spisd_result_t spisd_write_block(uint32_t sector, const uint8_t *buffer) {
     uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
 
     if ((response & 0x1F) == 0x05) {
-
-        /* Wait all the data programm finished */
-        for (uint32_t i = 0; i < 0x40000; i++) {
-            if ( _io->wr_rd_byte(DUMMY_BYTE) != 0x00) {
-                ret = SPISD_RESULT_OK;
-                break;
-            }
-        }
+        ret = _wait_ready();
     }
 
     _io->relese();
@@ -547,7 +622,7 @@ spisd_result_t spisd_read_multi_block_begin(uint32_t sector) {
         sector = sector << 9;
     }
 
-    if (_send_command(CMD18, sector, 0) != 0x00) {
+    if (_send_command(CMD18, sector, 1) != 0x00) {
         return SPISD_RESULT_ERROR;
     }
 
@@ -564,8 +639,9 @@ spisd_result_t spisd_read_multi_block_read(uint8_t *buffer, uint32_t num_sectors
         spisd_result_t ret = _read_buffer(&buffer[i * BLOCK_SIZE], BLOCK_SIZE);
 
         if (ret != SPISD_RESULT_OK) {
-            /* Send stop data transmit command - CMD12    */
-            _send_command(CMD12, 0, 0);
+            /* The caller must stop the transfer, including on read failure. */
+            _io->relese();
+            _io->wr_rd_byte(DUMMY_BYTE);
             return SPISD_RESULT_ERROR;
         }
     }
@@ -576,12 +652,27 @@ spisd_result_t spisd_read_multi_block_read(uint8_t *buffer, uint32_t num_sectors
     return SPISD_RESULT_OK;
 }
 
+static spisd_result_t _stop_transmission(void) {
+
+    /* CMD12 returns R1b: keep CS asserted until the card finishes being busy. */
+    uint8_t response = _send_command_hold(CMD12, 0, 1);
+    spisd_result_t result = SPISD_RESULT_ERROR;
+    if (response == 0x00) {
+        result = _wait_ready();
+    } else if (response == DUMMY_BYTE) {
+        result = SPISD_RESULT_TIMEOUT;
+    }
+
+    _io->relese();
+    _io->wr_rd_byte(DUMMY_BYTE);
+    if (result != SPISD_RESULT_OK) {
+        LOG_E("CMD12 failed: response=0x%02x, result=%d", response, result);
+    }
+    return result;
+}
+
 spisd_result_t spisd_read_multi_block_end(void) {
-
-    /* Send stop data transmit command - CMD12 */
-    _send_command(CMD12, 0, 0);
-
-    return SPISD_RESULT_OK;
+    return _stop_transmission();
 }
 
 spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, uint32_t num_sectors) {
@@ -593,11 +684,11 @@ spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, u
 
     /* Send command ACMD23 berfore multi write if is not a MMC card */
     if (_card_type != CARD_TYPE_MMC) {
-        _send_command(CMD55, 0, 0x00);
-        _send_command(ACMD23, num_sectors, 0x00);
+        _send_command(CMD55, 0, 1);
+        _send_command(ACMD23, num_sectors, 1);
     }
 
-    if (_send_command(CMD25, sector, 0) != 0x00) {
+    if (_send_command(CMD25, sector, 1) != 0x00) {
         return SPISD_RESULT_ERROR;
     }
 
@@ -617,49 +708,33 @@ spisd_result_t spisd_write_multi_block(uint32_t sector, uint8_t const *buffer, u
         _io->wr_rd_byte(DUMMY_BYTE);
         _io->wr_rd_byte(DUMMY_BYTE);
 
-        /* MSD card accept the data */
-        if ((_io->wr_rd_byte(DUMMY_BYTE) & 0x1F) != 0x05) {
-            _io->relese();
-            _io->wr_rd_byte(DUMMY_BYTE);
+        uint8_t response = _io->wr_rd_byte(DUMMY_BYTE);
+        if ((response & 0x1F) != 0x05) {
+            LOG_E("SD write rejected: block=%lu, response=0x%02x", (unsigned long)i, response);
+            /* A rejected CMD25 data block must be aborted with CMD12. */
+            (void)_wait_ready();
+            (void)_stop_transmission();
             return SPISD_RESULT_ERROR;
         }
 
-        /* Wait all the data programm finished    */
-        uint32_t timeout = 0;
-
-        while (_io->wr_rd_byte(DUMMY_BYTE) != 0xFF) {
-            /* Timeout return */
-            if (timeout++ == 0x40000) {
-                _io->relese();
-                _io->wr_rd_byte(DUMMY_BYTE);
-                return SPISD_RESULT_ERROR;
-            }
+        spisd_result_t result = _wait_ready();
+        if (result != SPISD_RESULT_OK) {
+            LOG_E("SD write busy timeout: block=%lu", (unsigned long)i);
+            (void)_stop_transmission();
+            return result;
         }
     }
 
-    /* Send end of transmit token: 0xFD */
-    if (_io->wr_rd_byte(0xFD) != 0x00) {
-
-        _io->wr_rd_byte(DUMMY_BYTE);
-        _io->wr_rd_byte(DUMMY_BYTE);
-
-        /* Wait all the data programm finished */
-        for (uint32_t i = 0; i < 0x40000; i++) {
-            if (_io->wr_rd_byte(DUMMY_BYTE) == 0xFF) {
-                _io->relese();
-                _io->wr_rd_byte(DUMMY_BYTE);
-
-                for (uint32_t i = 0; i < 0x40000; i++) {
-                    if (_io->wr_rd_byte(DUMMY_BYTE) == 0xFF) {
-                        return SPISD_RESULT_OK;
-                    }
-                }
-            }
-        }
-    }
+    /* The byte received while sending Stop Tran is not an acknowledgement. */
+    _io->wr_rd_byte(0xFD);
+    /* Busy may start up to eight clocks after the stop token (NBR). */
+    _io->wr_rd_byte(DUMMY_BYTE);
+    spisd_result_t result = _wait_ready();
 
     _io->relese();
     _io->wr_rd_byte(DUMMY_BYTE);
-
-    return SPISD_RESULT_ERROR;
+    if (result != SPISD_RESULT_OK) {
+        LOG_E("SD write stop busy timeout");
+    }
+    return result;
 }

@@ -79,7 +79,7 @@ namespace K210
         return 0;
     }
 
-    int KPU_Base::load_kmodel(fs::FS &fs, const char *name)
+    int KPU_Base::load_kmodel(fs::FS &fs, const char *name, bool check_size)
     {
         fs::File file = fs.open(name);
 
@@ -123,15 +123,19 @@ namespace K210
             return -1;
         }
 
-        if(model_size > file_size)
-        {
-            file.close();
+        if(check_size) {
+            if(model_size > file_size)
+            {
+                file.close();
 
-            LOG_E("Model in filesystem maybe damaged");
-            return -1;
-        }
-        else if(model_size < file_size)
-        {
+                LOG_E("Model in filesystem maybe damaged, %d > %d", model_size, file_size);
+                return -1;
+            }
+            else if(model_size < file_size)
+            {
+                model_size = file_size;
+            }
+        } else {
             model_size = file_size;
         }
 
@@ -169,29 +173,34 @@ namespace K210
         return 0;
     }
 
-    int KPU_Base::load_kmodel(uint32_t offset)
+    int KPU_Base::load_kmodel(uint32_t offset, int size)
     {
-        size_t hdr_size = 64 * 1024;
-        uint8_t *hdr_buff = (uint8_t *)rt_malloc_align(hdr_size, 8);
-        if(NULL == hdr_buff)
-        {
-            LOG_E("malloc failed");
-            return -1;
-        }
+        int model_size = size;
 
-        if(W25QXX_OK != hal_flash_read_data(offset, hdr_buff, hdr_size))
-        {
+        if((-1) == size) {
+            size_t hdr_size = 64 * 1024;
+
+            uint8_t *hdr_buff = (uint8_t *)rt_malloc_align(hdr_size, 8);
+            if(NULL == hdr_buff)
+            {
+                LOG_E("malloc failed");
+                return -1;
+            }
+
+            if(W25QXX_OK != hal_flash_read_data(offset, hdr_buff, hdr_size))
+            {
+                rt_free_align(hdr_buff);
+
+                LOG_E("read flash failed");
+                return -1;
+            }
+
+            model_size = maix_kpu_helper_probe_model_size(hdr_buff, hdr_size);
+
             rt_free_align(hdr_buff);
-
-            LOG_E("read flash failed");
-            return -1;
         }
 
-        int model_size = maix_kpu_helper_probe_model_size(hdr_buff, hdr_size);
-
-        rt_free_align(hdr_buff);
-
-        if(model_size <= 0)
+        if(0 >= model_size)
         {
             LOG_E("parse model failed");
             return -1;
@@ -236,7 +245,7 @@ namespace K210
         }
     }
 
-    int KPU_Base::run_kmodel(uint8_t *r8g8b8, int w, int h, dmac_channel_number_t dam_ch)
+    int KPU_Base::run_kmodel(uint8_t *rgbp888, int w, int h, dmac_channel_number_t dam_ch)
     {
         bool used_hal_dma_chn = false;
         dmac_channel_number_t _dma_ch;
@@ -247,7 +256,7 @@ namespace K210
             return -1;
         }
 
-        if(NULL == r8g8b8)
+        if(NULL == rgbp888)
         {
             LOG_E("Invalid input");
             return -1;
@@ -277,7 +286,7 @@ namespace K210
         }
 
         _ai_done_flag = 0;
-        if(0x00 != kpu_run_kmodel(&model.ctx, r8g8b8, _dma_ch, ai_done, NULL))
+        if(0x00 != kpu_run_kmodel(&model.ctx, rgbp888, _dma_ch, ai_done, NULL))
         {
             if(used_hal_dma_chn)
             {
@@ -304,13 +313,13 @@ namespace K210
 
     int KPU_Base::run_kmodel(Image *img, dmac_channel_number_t dam_ch)
     {
-        if(IMAGE_FORMAT_R8G8B8 != img->format)
+        if(IMAGE_FORMAT_RGBP888 != img->format())
         {
             LOG_E("Invalid image format");
             return -1;
         }
 
-        return run_kmodel(img->pixel, img->w, img->h, dam_ch);
+        return run_kmodel(img->pixel(), img->width(), img->height(), dam_ch);
     }
 
     int KPU_Base::get_result(uint8_t **data, size_t *count, uint32_t startIndex)
@@ -395,9 +404,9 @@ namespace K210
         return 0;
     }
 
-    int KPU_Yolo2::run(uint8_t *r8g8b8, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch)
+    int KPU_Yolo2::run(uint8_t *rgbp888, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch)
     {
-        if(0x00 != run_kmodel(r8g8b8, w, h, dam_ch))
+        if(0x00 != run_kmodel(rgbp888, w, h, dam_ch))
         {
             LOG_E("run model failed");
             return -1;
@@ -419,13 +428,13 @@ namespace K210
 
     int KPU_Yolo2::run(Image *img, obj_info_t *info, dmac_channel_number_t dam_ch)
     {
-        if(IMAGE_FORMAT_R8G8B8 != img->format)
+        if(IMAGE_FORMAT_RGBP888 != img->format())
         {
             LOG_E("Invalid image format");
             return -1;
         }
 
-        return run(img->pixel, img->w, img->h, info, dam_ch);
+        return run(img->pixel(), img->width(), img->height(), info, dam_ch);
     }
 
 }

@@ -1,15 +1,19 @@
 # Arduino core for K210
 
-[![arduino-k210 github ci, based on ESP32 Arduino CI](https://github.com/kendryte/arduino-k210/actions/workflows/push.yml/badge.svg)](https://github.com/kendryte/arduino-k210/actions/workflows/push.yml) [![arduino-k210 documents build and deploy](https://github.com/kendryte/arduino-k210/actions/workflows/docs.yml/badge.svg)](https://github.com/kendryte/arduino-k210/actions/workflows/docs.yml) 
+Arduino support for Kendryte K210 boards.
 
-# Install
+[![CI](https://github.com/kendryte/arduino-k210/actions/workflows/push.yml/badge.svg)](https://github.com/kendryte/arduino-k210/actions/workflows/push.yml) [![Docs](https://github.com/kendryte/arduino-k210/actions/workflows/docs.yml/badge.svg)](https://github.com/kendryte/arduino-k210/actions/workflows/docs.yml)
 
-Use stable release core [package_k210_index.json](https://raw.githubusercontent.com/kendryte/arduino-k210/gh-pages/package_k210_index.json), or Develop core [package_k210_dev_index.json](https://raw.githubusercontent.com/kendryte/arduino-k210/gh-pages/package_k210_dev_index.json)
+## Install
 
-# Documentation
+1. In Arduino IDE preferences, add the [stable package URL](https://raw.githubusercontent.com/kendryte/arduino-k210/gh-pages/package_k210_index.json) to **Additional Boards Manager URLs**.
+2. Open **Boards Manager**, search for **K210**, and install the package by **Kendryte**.
+3. Select your board and serial port, then upload an example.
 
-You can read arduino-k210 online documentation on [canaan-creative.com](https://www.kendryte.com/index.html?channel=developer#/document/arduino) or [github-pages](https://kendryte.github.io/arduino-k210/main/)
+For development builds, use the [development package URL](https://raw.githubusercontent.com/kendryte/arduino-k210/gh-pages/package_k210_dev_index.json) instead.
 
-# New board adaptation
+## Guides
 
-If you want to adapt your board, refer to here [variants/README.md](variants/README.md)
+- [Documentation and API reference](https://kendryte.github.io/arduino-k210/main/)
+- [Add support for a board](variants/README.md)
+- [CI, hardware tests, and releases](.github/CI.md)

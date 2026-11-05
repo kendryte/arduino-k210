@@ -2,7 +2,7 @@
 Image
 ######
 
-`Image` 库用于处理k210的图像，为Camera和KPU提供图像类以及操作方法,包括图像裁剪缩放、rgb像素格式转换、bmp读取保存等功能。
+`Image` 库用于处理K210的图像，为Camera和KPU提供图像类以及操作方法，包括图像裁剪缩放、RGB像素格式转换、BMP/JPEG读取保存等功能。
 
 构造函数
 ^^^^^^^^^^^^
@@ -43,7 +43,7 @@ Image
         IMAGE_FORMAT_GRAYSCALE = 0, // bpp 1
         IMAGE_FORMAT_RGB565,        // bpp 2
         IMAGE_FORMAT_RGB888,        // bpp 3
-        IMAGE_FORMAT_R8G8B8,        // bpp 3
+        IMAGE_FORMAT_RGBP888,        // bpp 3
         IMAGE_FORMAT_INVALID = 4,
     };
 
@@ -65,6 +65,55 @@ Image
 .. code-block:: arduino
 
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply);
+
+属性获取方法
+^^^^^^^^^^^^^^
+
+描述
+======
+
+获取图像属性信息
+
+方法
+======
+
+.. code-block:: arduino
+
+    // 获取图像宽度
+    uint32_t width() const;
+    
+    // 获取图像高度
+    uint32_t height() const;
+    
+    // 获取图像每像素字节数
+    uint32_t bpp() const;
+    
+    // 获取图像格式
+    image_format_t format() const;
+    
+    // 获取图像数据指针
+    uint8_t* data() const;
+    uint8_t* pixel() const;
+    
+    // 获取图像数据总大小（字节）
+    uint32_t size() const;
+
+返回值
+========
+
+相应的属性值
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    Image *img = new Image(320, 240, IMAGE_FORMAT_RGB565, true);
+    
+    uint32_t w = img->width();     // 返回 320
+    uint32_t h = img->height();    // 返回 240
+    uint32_t s = img->size();      // 返回 320 * 240 * 2 = 153600
+    uint8_t* pixels = img->data(); // 返回图像数据指针
 
 cut
 ^^^^^^^^^
@@ -134,6 +183,204 @@ cut
 
     Image *img_cut = img_ai->cut(cut_rect);
 
+cut_to_new_format
+^^^^^^^^^^^^^^^^^^^
+
+描述
+======
+
+裁剪并转换图像格式
+
+语法
+======
+
+- 1.从src裁剪r矩形大小的图像并转换为新格式到dst
+
+.. code-block:: arduino
+
+    static int cut_to_new_format(Image *src, Image *dst, rectangle_t &r, image_format_t new_format, bool create);
+
+- 2.src_Image对象调用cut_to_new_format方法裁剪r矩形大小图像并转换格式到dst
+
+.. code-block:: arduino
+
+    int cut_to_new_format(Image *dst, rectangle_t &r, image_format_t new_format, bool create = true);
+
+- 3.src_Image对象调用cut_to_new_format方法裁剪r矩形大小图像并转换格式，返回结果图像
+
+.. code-block:: arduino
+
+    Image * cut_to_new_format(rectangle_t &r, image_format_t new_format);
+
+参数
+======
+
+* ``src`` 源图像
+* ``dst`` 生成的图像
+* ``rectangle_t`` 裁剪的矩形框信息
+* ``new_format`` 目标图像格式
+* ``create`` 是否为生成的图像创建内存
+
+返回值
+========
+
+- 语法1,2  
+    0：成功，其他值：失败
+- 语法3  
+    目标图像指针
+
+cut_to_grayscale
+^^^^^^^^^^^^^^^^^
+
+描述
+======
+
+裁剪并转换为灰度图
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    int cut_to_grayscale(Image *dst, rectangle_t &r, bool create = true);
+
+- 2
+
+.. code-block:: arduino
+
+    Image * cut_to_grayscale(rectangle_t &r);
+
+参数
+======
+
+* ``dst`` 生成的图像
+* ``rectangle_t`` 裁剪的矩形框信息
+* ``create`` 是否为生成的图像创建内存
+
+返回值
+========
+
+- 语法1 
+    0：成功，其他值：失败
+- 语法2
+    目标图像指针
+
+cut_to_rgb565
+^^^^^^^^^^^^^^
+
+描述
+======
+
+裁剪并转换为 `rgb565` 格式
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    int cut_to_rgb565(Image *dst, rectangle_t &r, bool create = true);
+
+- 2
+
+.. code-block:: arduino
+
+    Image * cut_to_rgb565(rectangle_t &r);
+
+参数
+======
+
+* ``dst`` 生成的图像
+* ``rectangle_t`` 裁剪的矩形框信息
+* ``create`` 是否为生成的图像创建内存
+
+返回值
+========
+
+- 语法1 
+    0：成功，其他值：失败
+- 语法2
+    目标图像指针
+
+cut_to_rgb888
+^^^^^^^^^^^^^^
+
+描述
+======
+
+裁剪并转换为 `rgb888` 格式
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    int cut_to_rgb888(Image *dst, rectangle_t &r, bool create = true);
+
+- 2
+
+.. code-block:: arduino
+
+    Image * cut_to_rgb888(rectangle_t &r);
+
+参数
+======
+
+* ``dst`` 生成的图像
+* ``rectangle_t`` 裁剪的矩形框信息
+* ``create`` 是否为生成的图像创建内存
+
+返回值
+========
+
+- 语法1 
+    0：成功，其他值：失败
+- 语法2
+    目标图像指针
+
+cut_to_rgbp888
+^^^^^^^^^^^^^^
+
+描述
+======
+
+裁剪并转换为 `rgbp888` 格式
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    int cut_to_rgbp888(Image *dst, rectangle_t &r, bool create = true);
+
+- 2
+
+.. code-block:: arduino
+
+    Image * cut_to_rgbp888(rectangle_t &r);
+
+参数
+======
+
+* ``dst`` 生成的图像
+* ``rectangle_t`` 裁剪的矩形框信息
+* ``create`` 是否为生成的图像创建内存
+
+返回值
+========
+
+- 语法1 
+    0：成功，其他值：失败
+- 语法2
+    目标图像指针
+
 resize
 ^^^^^^^^^
 
@@ -170,9 +417,9 @@ resize
 
 * ``dst`` 生成的图像
 
-* ``width`` 裁剪图像宽
+* ``width`` 目标图像宽
 
-* ``height`` 裁剪图像高
+* ``height`` 目标图像高
 
 * ``create`` 是否为生成的图像创建内存
 
@@ -191,7 +438,7 @@ resize
 
 .. code-block:: arduino
 
-    img_128x128 = new Image(128, 128, IMAGE_FORMAT_R8G8B8, true);
+    img_128x128 = new Image(128, 128, IMAGE_FORMAT_RGBP888, true);
     img_cut->resize(img_128x128, 128, 128, false);
 
 
@@ -337,13 +584,13 @@ to_rgb888
     Image *img_rgb888;
     img_rgb888 = img_gray->to_rgb888();
 
-to_r8g8b8
+to_rgbp888
 ^^^^^^^^^^^^^^
 
 描述
 ======
 
-转换为 `r8g8b8` 格式，作为KPU输入图需要的格式
+转换为 `rgbp888` 格式，作为KPU输入图需要的格式
 
 语法
 ======
@@ -352,13 +599,13 @@ to_r8g8b8
 
 .. code-block:: arduino
 
-    int to_r8g8b8(Image *dst, bool create = true);
+    int to_rgbp888(Image *dst, bool create = true);
 
 - 2
 
 .. code-block:: arduino
 
-    Image * to_r8g8b8(void);
+    Image * to_rgbp888(void);
 
 参数
 ======
@@ -381,8 +628,8 @@ to_r8g8b8
 
 .. code-block:: arduino
 
-    Image *img_r8g8b8;
-    img_r8g8b8 = img_gray->to_r8g8b8();
+    Image *img_rgbp888;
+    img_rgbp888 = img_gray->to_rgbp888();
 
 load_bmp
 ^^^^^^^^^
@@ -484,14 +731,114 @@ save_bmp
         delete rgb888;
     }
 
+save_jpeg
+^^^^^^^^^
+
+描述
+======
+
+保存为JPEG图像
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    static int save_jpeg(Image *img, fs::FS &fs, const char *name, int quality = 80);
+
+- 2
+
+.. code-block:: arduino
+
+    int save_jpeg(fs::FS &fs, const char *name, int quality = 80);
+
+参数
+======
+
+* ``img`` 要保存的图像
+* ``fs`` 文件系统，使用SD卡则为 `FFat`
+* ``name`` JPEG图像文件路径
+* ``quality`` JPEG质量（1-100，默认80）
+
+返回值
+========
+
+0：成功，其他值：失败
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    if(img_display)
+    {
+        result = img_display->save_jpeg(FFat, "/image.jpg", 90);
+    }
+
+compress_jpeg
+^^^^^^^^^^^^^
+
+描述
+======
+
+压缩图像为JPEG格式到缓冲区
+
+语法
+======
+
+- 1
+
+.. code-block:: arduino
+
+    static int compress_jpeg(Image *img, uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
+
+- 2
+
+.. code-block:: arduino
+
+    int compress_jpeg(uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality = 80);
+
+参数
+======
+
+* ``img`` 要压缩的图像
+* ``jpeg_buffer`` 存放JPEG数据的缓冲区
+* ``buffer_capacity`` 缓冲区容量
+* ``jpeg_size`` 返回实际JPEG数据大小
+* ``quality`` JPEG质量（1-100，默认80）
+
+返回值
+========
+
+0：成功，其他值：失败
+
+示例说明
+============
+
+.. code-block:: arduino
+
+    uint8_t jpeg_buffer[32768];
+    size_t jpeg_size = 0;
+    
+    if(img_display)
+    {
+        result = img_display->compress_jpeg(jpeg_buffer, sizeof(jpeg_buffer), &jpeg_size, 85);
+        if(result == 0)
+        {
+            // 使用压缩后的JPEG数据
+        }
+    }
+
 例程 - color_convert_test.ino
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **颜色格式转换**
 
-以下是一个图像格式转换处理示例程序。它使用OV2640摄像头获取图像数据，并通过ST7789V液晶屏将不同格式的图像数据（RGB565、RGB888和R8G8B8）显示出来。
+以下是一个图像格式转换处理示例程序。它使用OV2640摄像头获取图像数据，并通过ST7789V液晶屏将不同格式的图像数据（RGB565、RGB888和RGBP888）显示出来。
 
-程序中使用了OV2640库、ST7789V库、FFat库和K210图像处理库来实现图像采集和显示，通过调用Image类的方法（to_grayscale，to_rgb565，to_rgb888，to_r8g8b8）实现不同格式间的转换。
+程序中使用了OV2640库、ST7789V库、FFat库和K210图像处理库来实现图像采集和显示，通过调用Image类的方法（to_grayscale，to_rgb565，to_rgb888，to_rgbp888）实现不同格式间的转换。
 
 需要注意的点包括：需要正确配置OV2640摄像头和ST7789V液晶屏的参数、需要正确挂载SD卡、需要正确获取图像缓冲区并创建Image对象、需要正确调用Image类的方法进行图像格式转换，并在合适的时候释放内存以避免内存泄漏。
 
@@ -534,3 +881,115 @@ save_bmp
 
 .. literalinclude:: ../../../libraries/Image/examples/save_camera_image/save_camera_image.ino
     :language: arduino
+
+API参考总结
+^^^^^^^^^^^^^^^^
+
+下表总结了Image类的主要方法：
+
+.. list-table::
+    :header-rows: 1
+    :widths: 20 40 40
+
+    * - 方法分类
+      - 方法名称
+      - 描述
+    * - 构造函数
+      - Image()
+      - 默认构造函数
+    * -
+      - Image(w,h,fmt,create)
+      - 带参数的构造函数
+    * -
+      - Image(w,h,fmt,buffer)
+      - 使用用户缓冲区的构造
+    * - 属性获取
+      - width(), height()
+      - 获取宽高
+    * -
+      - bpp(), format()
+      - 获取像素格式
+    * -
+      - data(), pixel()
+      - 获取数据指针
+    * -
+      - size()
+      - 获取图像大小
+    * - 裁剪操作
+      - cut()
+      - 简单裁剪
+    * -
+      - cut_to_new_format()
+      - 裁剪并转换格式
+    * -
+      - cut_to_grayscale()
+      - 裁剪为灰度
+    * -
+      - cut_to_rgb565()
+      - 裁剪为RGB565
+    * -
+      - cut_to_rgb888()
+      - 裁剪为RGB888
+    * -
+      - cut_to_rgbp888()
+      - 裁剪为RGBP888
+    * - 缩放操作
+      - resize()
+      - 图像缩放
+    * - 格式转换
+      - to_grayscale()
+      - 转换为灰度
+    * -
+      - to_rgb565()
+      - 转换为RGB565
+    * -
+      - to_rgb888()
+      - 转换为RGB888
+    * -
+      - to_rgbp888()
+      - 转换为RGBP888
+    * - 文件操作
+      - load_bmp()
+      - 加载BMP图像
+    * -
+      - save_bmp()
+      - 保存为BMP
+    * -
+      - save_jpeg()
+      - 保存为JPEG
+    * -
+      - compress_jpeg()
+      - 压缩为JPEG到缓冲区
+
+使用建议
+^^^^^^^^^
+
+1. **内存管理**：使用 `new` 创建的 `Image` 对象需要手动 `delete` 释放内存。使用用户缓冲区的Image对象不会自动释放缓冲区。
+
+2. **格式转换效率**：裁剪并转换格式的复合操作（如 `cut_to_rgb565()`）通常比先裁剪再转换更高效。
+
+3. **JPEG压缩**：JPEG压缩会消耗更多CPU资源，建议在需要节省存储空间或网络传输时使用。
+
+4. **缓冲区对齐**：内部分配的图像缓冲区是8字节对齐的，有利于DMA操作和性能优化。
+
+5. **错误处理**：所有方法都返回错误码，建议检查返回值确保操作成功。
+
+6. **格式限制**：JPEG压缩目前主要支持RGB888格式，其他格式可能需要先转换。
+
+常见问题
+^^^^^^^^^
+
+Q: 为什么有些图像操作返回NULL？
+A: 当内存分配失败或参数错误时，返回NULL表示操作失败。
+
+Q: JPEG保存的质量参数如何选择？
+A: 质量参数1-100，值越高图像质量越好但文件越大。通常80-90之间提供良好的质量/大小平衡。
+
+Q: 如何处理不同格式的图像？
+A: 使用 `format()` 方法检查图像格式，然后使用相应的转换方法。
+
+Q: 如何高效处理大图像？
+A: 使用裁剪操作处理感兴趣区域，避免全图处理。使用用户提供的缓冲区减少内存分配。
+
+Q: RGBP888格式有什么特殊用途？
+A: RGBP888是KPU（神经网络处理器）要求的输入格式，三个通道分别存储在不同的平面中。

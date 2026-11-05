@@ -15,7 +15,7 @@ cut	            KEYWORD2
 resize  	    KEYWORD2
 to_grayscale	KEYWORD2
 to_rgb565	    KEYWORD2
-to_r8g8b8	    KEYWORD2
+to_rgbp888	    KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

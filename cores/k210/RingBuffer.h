@@ -1,141 +1,59 @@
-/*
-  Copyright (c) 2014 Arduino.  All right reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
-#ifdef __cplusplus
-
-#ifndef _RING_BUFFER_
-#define _RING_BUFFER_
-
+#pragma once
 #include <stdint.h>
-#include <string.h>
-
-// namespace arduino {
-
-// Define constants and variables for buffering incoming serial data.  We're
-// using a ring buffer (I think), in which head is the index of the location
-// to which to write the next incoming character and tail is the index of the
-// location from which to read.
+#ifndef SERIAL_BUFFER_SIZE
 #define SERIAL_BUFFER_SIZE 64
+#endif
+// Single producer / single consumer queue. clear() requires both sides to be quiescent.
+template <int N> class RingBufferN {
+    static_assert(N > 0, "ring buffer capacity must be positive");
 
-template <int N>
-class RingBufferN
-{
-  public:
-    uint8_t _aucBuffer[N] ;
-    volatile int _iHead ;
-    volatile int _iTail ;
-    volatile int _numElems;
+public:
+    void store_char(uint8_t value)
+    {
+        if (isFull())
+            return;
+        data_[write_] = value;
+        write_        = (write_ + 1) % N;
+        __atomic_add_fetch(&count_, 1, __ATOMIC_RELEASE);
+    }
+    int read_char()
+    {
+        if (!available())
+            return -1;
+        const uint8_t value = data_[read_];
+        read_               = (read_ + 1) % N;
+        __atomic_sub_fetch(&count_, 1, __ATOMIC_RELEASE);
+        return value;
+    }
+    int peek()
+    {
+        return available() ? data_[read_] : -1;
+    }
+    int available()
+    {
+        return __atomic_load_n(&count_, __ATOMIC_ACQUIRE);
+    }
+    int availableForStore()
+    {
+        return N - available();
+    }
+    bool isFull()
+    {
+        return available() == N;
+    }
+    void clear()
+    {
+        read_ = write_ = 0;
+        __atomic_store_n(&count_, 0, __ATOMIC_RELEASE);
+    }
 
-  public:
-    RingBufferN( void ) ;
-    void store_char( uint8_t c ) ;
-    void clear();
-    int read_char();
-    int available();
-    int availableForStore();
-    int peek();
-    bool isFull();
-
-  private:
-    int nextIndex(int index);
-    inline bool isEmpty() const { return (_numElems == 0); }
+private:
+    uint8_t  data_[N] = {};
+    unsigned read_ = 0, write_ = 0;
+    int      count_ = 0;
 };
-
-typedef RingBufferN<SERIAL_BUFFER_SIZE> RingBuffer;
-
-
-template <int N>
-RingBufferN<N>::RingBufferN( void )
-{
-    memset( _aucBuffer, 0, N ) ;
-    clear();
-}
-
-template <int N>
-void RingBufferN<N>::store_char( uint8_t c )
-{
-  // if we should be storing the received character into the location
-  // just before the tail (meaning that the head would advance to the
-  // current location of the tail), we're about to overflow the buffer
-  // and so we don't write the character or advance the head.
-  if (!isFull())
-  {
-    _aucBuffer[_iHead] = c ;
-    _iHead = nextIndex(_iHead);
-    _numElems++;
-  }
-}
-
-template <int N>
-void RingBufferN<N>::clear()
-{
-  _iHead = 0;
-  _iTail = 0;
-  _numElems = 0;
-}
-
-template <int N>
-int RingBufferN<N>::read_char()
-{
-  if (isEmpty())
-    return -1;
-
-  uint8_t value = _aucBuffer[_iTail];
-  _iTail = nextIndex(_iTail);
-  _numElems--;
-
-  return value;
-}
-
-template <int N>
-int RingBufferN<N>::available()
-{
-  return _numElems;
-}
-
-template <int N>
-int RingBufferN<N>::availableForStore()
-{
-  return (N - _numElems);
-}
-
-template <int N>
-int RingBufferN<N>::peek()
-{
-  if (isEmpty())
-    return -1;
-
-  return _aucBuffer[_iTail];
-}
-
-template <int N>
-int RingBufferN<N>::nextIndex(int index)
-{
-  return (uint32_t)(index + 1) % N;
-}
-
-template <int N>
-bool RingBufferN<N>::isFull()
-{
-  return (_numElems == N);
-}
-
-// }
-
-#endif /* _RING_BUFFER_ */
-#endif /* __cplusplus */
+using RingBuffer = RingBufferN<SERIAL_BUFFER_SIZE>;

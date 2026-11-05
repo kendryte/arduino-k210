@@ -94,11 +94,11 @@ run_kmodel
 语法
 ======
 
-* 使用r8g8b8内存中的图运行
+* 使用rgbp888内存中的图运行
 
 .. code-block:: arduino
 
-    int run_kmodel(uint8_t *r8g8b8, int w, int h, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
+    int run_kmodel(uint8_t *rgbp888, int w, int h, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);
 
 * 使用Image图运行
 
@@ -109,7 +109,7 @@ run_kmodel
 参数
 ========
 
-* ``r8g8b8`` r8g8b8格式源图像内存
+* ``rgbp888`` rgbp888格式源图像内存
 
 * ``w`` 图像宽
 
@@ -129,7 +129,7 @@ run_kmodel
 
 .. code-block:: arduino
 
-    img_128x128 = new Image(128, 128, IMAGE_FORMAT_R8G8B8, true);
+    img_128x128 = new Image(128, 128, IMAGE_FORMAT_RGBP888, true);
     landmark.run_kmodel(img_128x128)
 
 
@@ -374,8 +374,8 @@ run
 语法
 ======
 
-* 使用r8g8b8内存中的图运行
-    ``int run(uint8_t *r8g8b8, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);``
+* rgbp888
+    ``int run(uint8_t *rgbp888, int w, int h, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);``
 
 * 使用Image图运行
     ``int run(Image *img, obj_info_t *info, dmac_channel_number_t dam_ch = DMAC_CHANNEL_MAX);``
@@ -383,7 +383,7 @@ run
 参数
 ========
 
-* ``r8g8b8`` r8g8b8格式源图像内存
+* ``rgbp888`` rgbp888格式源图像内存
 
 * ``w`` 图像宽
 

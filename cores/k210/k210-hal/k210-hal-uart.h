@@ -53,6 +53,8 @@ extern "C" {
 struct uart_struct_t;
 typedef struct uart_struct_t hal_uart_t;
 
+typedef void (*uart_on_data_recv)(void *user_data);
+
 hal_uart_t* hal_uart_begin(uint8_t uartNum, uint32_t baudrate, uint32_t config, int8_t rxPin, int8_t txPin, uint16_t buffer_size);
 void hal_uart_end(hal_uart_t* uart);
 
@@ -64,6 +66,8 @@ size_t hal_uart_write_one(hal_uart_t* uart, uint8_t c);
 size_t hal_uart_write_from_buffer(hal_uart_t* uart, const uint8_t *buffer, size_t size);
 
 bool hal_uart_is_opened(hal_uart_t* uart);
+
+bool hal_uart_on_data_recv(hal_uart_t* uart, uart_on_data_recv cb, void *user_data);
 
 #ifdef __cplusplus
 }

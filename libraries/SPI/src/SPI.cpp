@@ -1,394 +1,215 @@
-/* 
- SPI.cpp - SPI library for esp8266
-
- Copyright (c) 2015 Hristo Gochkov. All rights reserved.
- This file is part of the esp8266 core for Arduino environment.
- 
- This library is free software; you can redistribute it and/or
- modify it under the terms of the GNU Lesser General Public
- License as published by the Free Software Foundation; either
- version 2.1 of the License, or (at your option) any later version.
-
- This library is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- Lesser General Public License for more details.
-
- You should have received a copy of the GNU Lesser General Public
- License along with this library; if not, write to the Free Software
- Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
-#define DBG_TAG "SPI"
-#define DBG_LVL DBG_WARNING
-#include "rtdbg.h"
-
-#include "Arduino.h"
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "SPI.h"
-
-#define SPI_PARAM_LOCK()    do {} while (RT_EOK != rt_mutex_take(_paramLock, RT_WAITING_FOREVER))
-#define SPI_PARAM_UNLOCK()  rt_mutex_release(_paramLock)
-
-extern uint8_t _sdcard_use_hw_spi1;
-
-struct spi_cs_table {
-    SPIBUS bus;
-    bool func_stat[ SPI_CHIP_SELECT_MAX ];
-};
-
-static struct spi_cs_table _spi_cs_tab[] = {
-    { SPI_BUS_0 ,       {false, false, false, false}},
-    { SPI_BUS_1 ,       {false, false, false, false}},
-    // { SPI_BUS_2 ,       {false, false, false, false}}, /* Not support. */
-    // { SPI_BUS_3 ,       {false, false, false, false}}, /* Not support. */
-};
-
-#define SPI_CS_TAB_SIZE sizeof(_spi_cs_tab) / sizeof(_spi_cs_tab[0])
-
-static inline void spi_release_cs_func(SPIBUS bus, spi_chip_select_t func)
+extern "C" uint8_t _sdcard_use_hw_spi1;
+namespace {
+SPIClass* owners[2] = {};
+uint8_t   reversed(uint8_t input)
 {
-    if(func < SPI_CHIP_SELECT_MAX )
-        _spi_cs_tab[bus].func_stat[func] = false;
-}
-
-static spi_chip_select_t spi_acquire_cs_func(SPIBUS bus)
-{
-    for(int i = 0; i < SPI_CS_TAB_SIZE ; i++) {
-        if(bus == _spi_cs_tab[i].bus) {
-            for(int j = 0; j < SPI_CHIP_SELECT_MAX ; j++) {
-                if(false == _spi_cs_tab[i].func_stat[j]) {
-                    _spi_cs_tab[i].func_stat[j] = true;
-                    return spi_chip_select_t(j);
-                }
-            }
-        }
+    uint8_t output = 0;
+    for (unsigned bit = 0; bit < 8; ++bit) {
+        output = (output << 1) | (input & 1);
+        input >>= 1;
     }
-
-    return SPI_CHIP_SELECT_MAX;
+    return output;
 }
-
-SPIClass::SPIClass(uint8_t spiBus)
-    :_sckPin(-1)
-    ,_mosiPin(-1)
-    ,_misoPin(-1)
-    ,_csPin(-1)
-    ,_inTransaction(false)
-    ,_paramLock(NULL)
-    ,_setting(SPISettings())
+}
+SPIClass SPI;
+SPIClass::SPIClass(uint8_t bus)
+    : bus_(bus)
 {
-    char _lock_name[RT_NAME_MAX];
-
-    snprintf(_lock_name, sizeof(_lock_name), "%dPspi", spiBus);
-
-    if(NULL == _paramLock) {
-        _paramLock = rt_mutex_create(_lock_name, RT_NULL);
-        if(NULL == _paramLock) {
-            LOG_E("rt_mutex_create failed.\n");
-            return;
-        }
-    }
-
-    _spiBus = SPIBUS(spiBus);
 }
-
 SPIClass::~SPIClass()
 {
     end();
-
-    if(NULL != _paramLock) {
-        rt_mutex_delete(_paramLock);
-        _paramLock = NULL;
-    }
 }
-
-void SPIClass::begin(int8_t sckPin, int8_t misoPin, int8_t mosiPin, int8_t csPin)
+void SPIClass::begin(int8_t sck, int8_t miso, int8_t mosi, int8_t cs)
 {
-    bool failed = false;
-
-    if(_sdcard_use_hw_spi1 && (SPI_BUS_1 == _spiBus)) {
-        LOG_E("SPI1 already used for sdcard!");
+    if (ready_ || bus_ > 1)
+        return;
+    // Explicit pins are recommended. With no pins, reuse existing FPIOA routing.
+    int8_t pins[] = { sck, miso, mosi, cs };
+    for (unsigned i = 0; i < 4; ++i) {
+        if (pins[i] < -1 || pins[i] >= K210_IO_NUMS)
+            return;
+        for (unsigned j = 0; j < i; ++j)
+            if (pins[i] >= 0 && pins[i] == pins[j])
+                return;
+    }
+    if ((bus_ == 0 && g_spi0_in_use) || (bus_ == 1 && _sdcard_use_hw_spi1))
+        return;
+    SPIClass* expected = nullptr;
+    if (!__atomic_compare_exchange_n(&owners[bus_], &expected, this, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return;
+    mutex_ = rt_mutex_create("spi", RT_IPC_FLAG_PRIO);
+    if (!mutex_) {
+        __atomic_store_n(&owners[bus_], static_cast<SPIClass*>(nullptr), __ATOMIC_RELEASE);
         return;
     }
-
-    if(g_spi0_in_use && (SPI_BUS_0 == _spiBus)) {
-        LOG_E("SPI0 already used for LCD\n");
-        return;
+    const int base    = bus_ ? FUNC_SPI1_D0 : FUNC_SPI0_D0;
+    const int funcs[] = { base + 13, base + 1, base, base + 8 };
+    for (unsigned i = 0; i < 4; ++i) {
+        pins_[i] = pins[i];
+        if (pins[i] >= 0)
+            hal_fpioa_set_pin_func(pins[i], static_cast<fpioa_function_t>(funcs[i]));
     }
-
-    if(_initialized) {
-        LOG_W("Bus already started.");
-        return;
-    }
-
-    if((-1 == sckPin) /* || (-1 == misoPin) */ || (-1 == mosiPin) /* || (-1 == csPin) */) {
-        LOG_E("Invalid Pins\n");
-        return;
-    }
-
-    SPI_PARAM_LOCK();
-
-    _sckPin = sckPin;
-    _misoPin = misoPin;
-    _mosiPin = mosiPin;
-    _csPin = csPin;
-
-    fpioa_function_t sck_fuc = FUNC_MAX , mosi_func = FUNC_MAX , miso_func = FUNC_MAX , cs_func = FUNC_MAX ;
-
-    spi_chip_select_t chip_sel = spi_acquire_cs_func(_spiBus);
-
-    if(SPI_CHIP_SELECT_MAX <= chip_sel) {
-        LOG_E("Invalid cs_func %d\n", chip_sel);
-        failed = true;
-        goto _fail;
-    }
-    _hwCS = chip_sel;
-
-    switch (_spiBus) {
-        case SPI_BUS_0: {
-            sck_fuc = FUNC_SPI0_SCLK ;
-            mosi_func = FUNC_SPI0_D0 ;
-            miso_func = FUNC_SPI0_D1 ;
-            cs_func = fpioa_function_t( FUNC_SPI0_SS0 + _hwCS);
-            break;
-        } case SPI_BUS_1: {
-            sck_fuc = FUNC_SPI1_SCLK ;
-            mosi_func = FUNC_SPI1_D0 ;
-            miso_func = FUNC_SPI1_D1 ;
-            cs_func = fpioa_function_t( FUNC_SPI1_SS0 + _hwCS);
-            break;
-        // } case SPI_BUS_2: {
-        //     break;
-        // } case SPI_BUS_3: {
-        //     break;
-        } default: {
-            LOG_E("Invalid spi_bus %d\n", _spiBus);
-            failed = true;
-            goto _fail;
-            break;
-        }
-    }
-
-    hal_fpioa_set_pin_func(_sckPin, sck_fuc);
-    hal_fpioa_set_pin_func(_mosiPin, mosi_func);
-
-    if(0 <= _misoPin) {
-        hal_fpioa_set_pin_func(_misoPin, miso_func);
-    }
-
-    if(0 <= _csPin) {
-        hal_fpioa_set_pin_func(_csPin, cs_func);
-    }
-
-    _initialized = true;
-
-_fail:
-    if(failed) {
-        LOG_E("Init failed");
-
-        _initialized = false;
-
-        hal_fpioa_clr_pin_func(_sckPin);
-        hal_fpioa_clr_pin_func(_mosiPin);
-
-        if(0 <= _misoPin) {
-            hal_fpioa_clr_pin_func(_misoPin);
-        }
-
-        if(0 <= _csPin) {
-            hal_fpioa_clr_pin_func(_csPin);
-        }
-        spi_release_cs_func(_spiBus, _hwCS);
-    }
-
-    SPI_PARAM_UNLOCK();
+    ready_ = true;
+    configure();
 }
-
 void SPIClass::end()
 {
-    SPI_PARAM_LOCK();
-
-    _initialized = false;
-
-    if(spi_device_num_t(_spiBus) < SPI_DEVICE_MAX)
-        sysctl_clock_disable(sysctl_clock_t(SYSCTL_CLOCK_SPI0 + _spiBus));
-
-    // free pins
-    hal_fpioa_clr_pin_func(_sckPin);
-    hal_fpioa_clr_pin_func(_mosiPin);
-
-    if(0 <= _misoPin) {
-        hal_fpioa_clr_pin_func(_misoPin);
+    if (!ready_)
+        return;
+    endTransaction();
+    spi[bus_]->ser    = 0;
+    spi[bus_]->ssienr = 0;
+    for (int8_t& pin : pins_) {
+        if (pin >= 0)
+            hal_fpioa_clr_pin_func(pin);
+        pin = -1;
     }
-
-    if(0 <= _csPin) {
-        hal_fpioa_clr_pin_func(_csPin);
-    }
-
-    spi_release_cs_func(_spiBus, _hwCS);
-
-    SPI_PARAM_UNLOCK();
+    ready_ = false;
+    rt_mutex_delete(mutex_);
+    mutex_ = nullptr;
+    __atomic_store_n(&owners[bus_], static_cast<SPIClass*>(nullptr), __ATOMIC_RELEASE);
 }
-
-void SPIClass::setFrequency(uint32_t freq)
+void SPIClass::configure()
 {
-    SPI_PARAM_LOCK();
-
-    if(_setting._clock != freq) {
-        _setting._clock = freq;
-
-        spi_init(spi_device_num_t(_spiBus), spi_work_mode_t(_setting._dataMode), SPI_FF_STANDARD, 8, /* settings._bitOrder */ 0);
-        spi_set_clk_rate(spi_device_num_t(_spiBus), _setting._clock);
-    }
-
-    SPI_PARAM_UNLOCK();
+    if (!ready_)
+        return;
+    spi_init(static_cast<spi_device_num_t>(bus_), static_cast<spi_work_mode_t>(settings_._dataMode), SPI_FF_STANDARD, 8, 0);
+    spi_set_clk_rate(static_cast<spi_device_num_t>(bus_), settings_._clock);
 }
-
-void SPIClass::setDataMode(uint8_t dataMode)
+void SPIClass::setBitOrder(uint8_t order)
 {
-    SPI_PARAM_LOCK();
-
-    if(_setting._dataMode != dataMode) {
-        _setting._dataMode = dataMode;
-
-        spi_init(spi_device_num_t(_spiBus), spi_work_mode_t(_setting._dataMode), SPI_FF_STANDARD, 8, /* settings._bitOrder */ 0);
-    }
-
-    SPI_PARAM_UNLOCK();
+    if (order > SPI_MSBFIRST || (mutex_ && rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK))
+        return;
+    settings_._bitOrder = order;
+    if (mutex_)
+        rt_mutex_release(mutex_);
 }
-
-void SPIClass::setBitOrder(uint8_t bitOrder)
+void SPIClass::setDataMode(uint8_t mode)
 {
-    SPI_PARAM_LOCK();
-
-    if(_setting._bitOrder != bitOrder) {
-        _setting._bitOrder = bitOrder;
-
-        spi_init(spi_device_num_t(_spiBus), spi_work_mode_t(_setting._dataMode), SPI_FF_STANDARD, 8, /* settings._bitOrder */ 0);
-    }
-
-    SPI_PARAM_UNLOCK();
+    if (mode > SPI_MODE3 || (mutex_ && rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK))
+        return;
+    settings_._dataMode = mode;
+    configure();
+    if (mutex_)
+        rt_mutex_release(mutex_);
 }
-
+void SPIClass::setFrequency(uint32_t hz)
+{
+    if (!hz || (mutex_ && rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK))
+        return;
+    settings_._clock = hz;
+    configure();
+    if (mutex_)
+        rt_mutex_release(mutex_);
+}
 void SPIClass::beginTransaction(SPISettings settings)
 {
-    SPI_PARAM_LOCK();
-
-    if((_setting._clock != settings._clock) || (_setting._dataMode != settings._dataMode) || (_setting._bitOrder != settings._bitOrder)) {
-        _setting._clock = settings._clock;
-        _setting._dataMode = settings._dataMode;
-        _setting._bitOrder = settings._bitOrder;
-
-        spi_init(spi_device_num_t(_spiBus), spi_work_mode_t(_setting._dataMode), SPI_FF_STANDARD, 8, /* settings._bitOrder */ 0);
+    if (!ready_ || !settings._clock || settings._dataMode > SPI_MODE3 || settings._bitOrder > SPI_MSBFIRST)
+        return;
+    if (rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK)
+        return;
+    if (transaction_) {
+        rt_mutex_release(mutex_);
+        return;
     }
-
-    _inTransaction = true;
+    transaction_ = true;
+    settings_    = settings;
+    configure();
 }
-
 void SPIClass::endTransaction()
 {
-    if(_inTransaction) {
-        _inTransaction = false;
-
-        SPI_PARAM_UNLOCK(); // <-- Im not sure should it be here or right after spiTransaction()
+    if (transaction_) {
+        transaction_ = false;
+        rt_mutex_release(mutex_);
     }
 }
-
-void SPIClass::write(uint8_t data)
+void SPIClass::transferBytes(const uint8_t* input, uint8_t* output, uint32_t size)
 {
-    uint8_t t = data;
-
-    spi_send_data_normal(spi_device_num_t(_spiBus), _hwCS, &t, 1);
+    if (!ready_ || !size)
+        return;
+    // RT-Thread mutexes are recursive: the transaction owner can transfer while
+    // another task must wait until endTransaction releases the outer lock.
+    if (rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK)
+        return;
+    auto* port   = spi[bus_];
+    port->ssienr = 0;
+    port->ctrlr0 &= ~(3U << 8); // SPI0/1: full duplex TMOD, eight-bit frames.
+    port->ctrlr1  = 0;
+    port->ssienr  = 1;
+    port->ser     = 1; // Hardware chip select 0 stays asserted for the entire buffer.
+    uint32_t sent = 0, received = 0;
+    while (received < size) {
+        // At most 32 outstanding frames: drain RX before its FIFO can overflow.
+        while (sent < size && sent - received < 32 && port->txflr < 32) {
+            const uint8_t value = input ? input[sent] : 0xff;
+            port->dr[0]         = settings_._bitOrder == SPI_LSBFIRST ? reversed(value) : value;
+            ++sent;
+        }
+        while (received < sent && port->rxflr) {
+            const uint8_t value = port->dr[0];
+            if (output)
+                output[received] = settings_._bitOrder == SPI_LSBFIRST ? reversed(value) : value;
+            ++received;
+        }
+    }
+    while (port->sr & 1U) { } // Wait for the final wire bit before releasing CS.
+    port->ser    = 0;
+    port->ssienr = 0;
+    rt_mutex_release(mutex_);
 }
-
-uint8_t SPIClass::transfer(uint8_t data)
+void SPIClass::transfer(void* buffer, uint32_t size)
 {
-    uint8_t t = data, r = 0xFF;
-
-    spi_transfer_data_standard(spi_device_num_t(_spiBus), _hwCS, &t, &r, 1);
-
-    return r;
+    transferBytes(static_cast<uint8_t*>(buffer), static_cast<uint8_t*>(buffer), size);
 }
-
-void SPIClass::write16(uint16_t data)
+uint8_t SPIClass::transfer(uint8_t value)
 {
-    uint8_t t[2];
-    uint16_t d = data;
-
-    t[0] = ((uint8_t*)&d)[1];
-    t[1] = ((uint8_t*)&d)[0];
-
-    spi_send_data_normal(spi_device_num_t(_spiBus), _hwCS, t, 2);
+    uint8_t answer = 0;
+    transferBytes(&value, &answer, 1);
+    return answer;
 }
-
-uint16_t SPIClass::transfer16(uint16_t data)
+uint32_t SPIClass::wordTransfer(uint32_t value, unsigned bytes)
 {
-    uint8_t t[2], r[2];
-    uint16_t d = data;
-
-    // __builtin_bswap16 ?
-    t[0] = ((uint8_t*)&d)[1];
-    t[1] = ((uint8_t*)&d)[0];
-
-    spi_transfer_data_standard(spi_device_num_t(_spiBus), _hwCS, t, r, 2);
-
-    ((uint8_t*)&d)[1] = r[0];
-    ((uint8_t*)&d)[0] = r[1];
-
-    return d;
+    if (!ready_ || rt_mutex_take(mutex_, RT_WAITING_FOREVER) != RT_EOK)
+        return 0;
+    // Keep the byte order stable through packing, transfer and unpacking.
+    uint8_t input[4], output[4] = {};
+    for (unsigned i = 0; i < bytes; ++i)
+        input[i] = value >> (8 * (settings_._bitOrder == SPI_MSBFIRST ? bytes - 1 - i : i));
+    transferBytes(input, output, bytes);
+    uint32_t result = 0;
+    for (unsigned i = 0; i < bytes; ++i)
+        result |= uint32_t(output[i]) << (8 * (settings_._bitOrder == SPI_MSBFIRST ? bytes - 1 - i : i));
+    rt_mutex_release(mutex_);
+    return result;
 }
-
-void SPIClass::write32(uint32_t data)
+uint16_t SPIClass::transfer16(uint16_t value)
 {
-    uint8_t t[4];
-    uint32_t d = data;
-
-    // __builtin_bswap32 ?
-    t[0] = ((uint8_t*)&d)[3];
-    t[1] = ((uint8_t*)&d)[2];
-    t[2] = ((uint8_t*)&d)[1];
-    t[3] = ((uint8_t*)&d)[0];
-
-    spi_send_data_normal(spi_device_num_t(_spiBus), _hwCS, t, 2);
+    return wordTransfer(value, 2);
 }
-
-uint32_t SPIClass::transfer32(uint32_t data)
+uint32_t SPIClass::transfer32(uint32_t value)
 {
-    uint8_t t[4], r[4];
-    uint32_t d = data;
-
-    t[0] = ((uint8_t*)&d)[3];
-    t[1] = ((uint8_t*)&d)[2];
-    t[2] = ((uint8_t*)&d)[1];
-    t[3] = ((uint8_t*)&d)[0];
-
-    spi_transfer_data_standard(spi_device_num_t(_spiBus), _hwCS, t, r, 4);
-
-    ((uint8_t*)&d)[0] = r[3];
-    ((uint8_t*)&d)[1] = r[2];
-    ((uint8_t*)&d)[2] = r[1];
-    ((uint8_t*)&d)[3] = r[0];
-
-    return d;
+    return wordTransfer(value, 4);
 }
-
-void SPIClass::transfer(void * data, uint32_t size) 
-{ 
-    transferBytes((const uint8_t *)data, (uint8_t *)data, size); 
-}
-
-/**
- * @param data uint8_t * data buffer. can be NULL for Read Only operation
- * @param out  uint8_t * output buffer. can be NULL for Write Only operation
- * @param size uint32_t
- */
-void SPIClass::transferBytes(const uint8_t * data, uint8_t * out, uint32_t size)
+void SPIClass::write(uint8_t value)
 {
-    spi_transfer_data_standard(spi_device_num_t(_spiBus), _hwCS, data, out, size);
+    (void)transfer(value);
 }
-
-void SPIClass::writeBytes(const uint8_t * data, uint32_t size)
+void SPIClass::write16(uint16_t value)
 {
-    spi_send_data_normal(spi_device_num_t(_spiBus), _hwCS, data, size);
+    (void)transfer16(value);
 }
-
-SPIClass SPI(1);
+void SPIClass::write32(uint32_t value)
+{
+    (void)transfer32(value);
+}
+void SPIClass::writeBytes(const uint8_t* input, uint32_t size)
+{
+    if (input)
+        transferBytes(input, nullptr, size);
+}

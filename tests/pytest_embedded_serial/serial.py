@@ -10,7 +10,8 @@ from typing import Dict, Optional
 import serial as pyserial
 from pytest_embedded.log import MessageQueue
 from pytest_embedded.utils import Meta
-from serial.tools import list_ports
+
+from .ports import list_serial_ports, select_port
 
 
 class Serial:
@@ -47,6 +48,11 @@ class Serial:
         msg_queue: MessageQueue,
         port: str = None,
         port_location: str = None,
+        port_serial_number: str = None,
+        port_interface: str = None,
+        port_vid: str = None,
+        port_pid: str = None,
+        port_board: str = None,
         baud: int = DEFAULT_BAUDRATE,
         meta: Optional[Meta] = None,
         **kwargs,
@@ -62,27 +68,20 @@ class Serial:
             self.proc.timeout = self.DEFAULT_PORT_CONFIG['timeout']  # set read timeout
             self.port = self.proc.port
         else:
-            # Need to detect or create instance
-            if port_location:
-                for _port in list_ports.comports():
-                    if _port.device in self.occupied_ports:
-                        continue
-                    if _port.location == port_location:
-                        if port and _port.device != port:
-                            raise ValueError(
-                                f'The specified location {port_location} binds with port {_port.device}, not {port}'
-                            )
-
-                        self.port = _port.device
-                        break
-                else:
-                    raise ValueError(f'The specified location {port_location} cannot be found.')
-            elif port:
-                self.port = port
-            else:
-                raise ValueError('Please specify port or provide the port location')
-
-            self.port = port
+            selectors = (port_location, port_serial_number, port_interface, port_vid, port_pid)
+            ports = list_serial_ports() if any(value is not None and value != '' for value in selectors) else ()
+            self.port = select_port(
+                ports,
+                port=port,
+                location=port_location,
+                serial_number=port_serial_number,
+                interface=port_interface,
+                vid=port_vid,
+                pid=port_pid,
+                board=port_board,
+                occupied=self.occupied_ports,
+            )
+            logging.info('Selected serial port: %s', self.port)
             port_config = copy.deepcopy(self.DEFAULT_PORT_CONFIG)
             port_config['baudrate'] = baud
             port_config.update(**kwargs)

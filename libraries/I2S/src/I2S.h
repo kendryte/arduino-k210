@@ -1,128 +1,70 @@
-/*
-  Copyright (c) 2016 Arduino LLC.  All right reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
-#ifndef _I2S_H_INCLUDED
-#define _I2S_H_INCLUDED
-
-#include <Arduino.h>
-
+#pragma once
 #include "I2SDoubleBuffer.h"
-
-#include "k210-hal.h"
-
+#include <Arduino.h>
 #define I2S_HAS_SET_BUFFER_SIZE 1
 
-typedef enum {
-  I2S_PHILIPS_MODE          = STANDARD_MODE,
-  I2S_RIGHT_JUSTIFIED_MODE  = RIGHT_JUSTIFYING_MODE,
-  I2S_LEFT_JUSTIFIED_MODE   = LEFT_JUSTIFYING_MODE
-} i2s_mode_t;
-
-class I2SClass : public Stream
-{
-public:
-  typedef void (*callback_t)(void);
-  typedef void (*callback_with_arg_t)(void *);
-
-  // the device index and pins must map to the "COM" pads in Table 6-1 of the datasheet 
-  I2SClass(uint8_t deviceIndex, uint8_t clockGenerator, uint8_t sdPin, uint8_t sckPin, uint8_t fsPin);
-
-  // the SCK and FS pins are driven as outputs using the sample rate
-  int begin(int mode, long sampleRate, int bitsPerSample);
-  // the SCK and FS pins are inputs, other side controls sample rate
-  int begin(int mode, int bitsPerSample);
-  void end();
-
-  // from Stream
-  virtual int available();
-  virtual int read();
-  virtual int peek();
-  virtual void flush();
-
-  // from Print
-  virtual size_t write(uint8_t);
-  virtual size_t write(const uint8_t *buffer, size_t size);
-
-  virtual int availableForWrite();
-
-  int read(void* buffer, size_t size);
-
-  size_t write(int);
-  size_t write(uint32_t);
-  size_t write(const void *buffer, size_t size);
-
-  void onTransmit(callback_with_arg_t cb, void *arg);
-  void onReceive(callback_with_arg_t cb, void *arg);
-
-  void onTransmit(callback_t cb) {
-    onTransmit(reinterpret_cast<callback_with_arg_t>(cb), NULL);
-  }
-  void onReceive(callback_t cb) {
-    onReceive(reinterpret_cast<callback_with_arg_t>(cb), NULL);
-  }
-
-  /// @brief Change Receive and Transmit Buffer Size, should call befor begin.
-  /// @param bufferSize New Buffer Size.
-  void setBufferSize(int bufferSize);
-  int getBufferSize(void) {
-    return _doubleBuffer.getSize();
-  }
-
-  /// @brief for dma irq use, use can not call this.
-  /// @param None
-  void _onTransferComplete(void);
-
-private:
-  int begin(int mode, long sampleRate, int bitsPerSample, bool driveClock);
-
-  void enableTransmitter();
-  void enableReceiver();
-
-  void sendData(void);
-  void recvData(void);
-
-private:
-  typedef enum {
-    I2S_STATE_IDLE,
-    I2S_STATE_TRANSMITTER,
-    I2S_STATE_RECEIVER
-  } i2s_state_t;
-
-  uint8_t _deviceIndex;
-  uint8_t _clockGenerator;
-  uint8_t _sdPin;
-  uint8_t _sckPin;
-  uint8_t _fsPin;
-
-  i2s_state_t _state;
-  dmac_channel_number_t _dmaChannel;
-  uint32_t _sampleRate;
-  int _bitsPerSample;
-  i2s_mode_t _mode;
-
-  volatile bool _dmaTransferInProgress;
-  I2SDoubleBuffer _doubleBuffer;
-
-  void *_onTransmitArg;
-  void *_onReceiveArg;
-
-  callback_with_arg_t _onTransmit;
-  callback_with_arg_t _onReceive;
+enum i2s_mode_t {
+    I2S_PHILIPS_MODE         = STANDARD_MODE,
+    I2S_RIGHT_JUSTIFIED_MODE = RIGHT_JUSTIFYING_MODE,
+    I2S_LEFT_JUSTIFIED_MODE  = LEFT_JUSTIFYING_MODE
 };
+// One task owns each instance. onReceive/onTransmit callbacks execute in DMA IRQs.
+class I2SClass : public Stream {
+public:
+    using callback_t          = void (*)();
+    using callback_with_arg_t = void (*)(void*);
+    I2SClass(uint8_t device, uint8_t clockGenerator, uint8_t sd, uint8_t sck, uint8_t fs);
+    ~I2SClass() override
+    {
+        end();
+    }
+    I2SClass(const I2SClass&) = delete;
+    I2SClass& operator=(const I2SClass&) = delete;
+    // Return 0 on success, -1 on invalid configuration or unavailable resources.
+    int       begin(int mode, long sampleRate, int bitsPerSample);
+    int       begin(int mode, int bitsPerSample);
+    void      end();
+    int       available() override;
+    int       availableForWrite() override;
+    int       read() override;
+    int       peek() override;
+    void      flush() override;
+    int       read(void* buffer, size_t size);
+    size_t    write(uint8_t value) override;
+    size_t    write(const uint8_t* buffer, size_t size) override;
+    size_t    write(const void* buffer, size_t size);
+    size_t    write(int value);
+    size_t    write(uint32_t value);
+    void      onTransmit(callback_with_arg_t cb, void* arg);
+    void      onReceive(callback_with_arg_t cb, void* arg);
+    void      onTransmit(callback_t cb);
+    void      onReceive(callback_t cb);
+    void      setBufferSize(int size);
+    int       getBufferSize()
+    {
+        return buffer_.getSize();
+    }
+    void _onTransferComplete();
 
-#endif
+private:
+    enum Direction { Idle, Sending, Receiving };
+    uint8_t               device_, clock_, sd_, sck_, fs_;
+    bool                  ready_     = false;
+    Direction             direction_ = Idle;
+    dmac_channel_number_t dma_       = DMAC_CHANNEL_MAX;
+    uint32_t              rate_      = 0;
+    int                   bits_ = 0, mode_ = 0;
+    volatile bool         busy_     = false;
+    bool                  received_ = false;
+    I2SDoubleBuffer       buffer_;
+    callback_with_arg_t   tx_ = nullptr, rx_ = nullptr;
+    callback_t            txSimple_ = nullptr, rxSimple_ = nullptr;
+    void *                txArg_ = nullptr, *rxArg_ = nullptr;
+    bool                  select(Direction direction);
+    void                  service();
+    static int            completed(void* context);
+};

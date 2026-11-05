@@ -3,10 +3,10 @@
 #include "rtdbg.h"
 #include "rtthread.h"
 
-#include <string.h>
-
 #include "Image.h"
-#include "image_cvt.h"
+#include "jpege.h"
+
+#include <string.h>
 
 // Configure the image reader.
 #define STBI_NO_JPEG
@@ -34,7 +34,7 @@
 
 // configure the image writer
 #define STBIW_MALLOC(sz)            rt_malloc(sz)
-#define STBIW_REALLOC(p,newsz)      rt_realloc(p,newsz)
+#define STBIW_REALLOC(p,newsz)      rt_realloc(p, newsz)
 #define STBIW_FREE(p)               rt_free(p)
 #define STBIW_ASSERT(x)             RT_ASSERT(x)
 
@@ -43,119 +43,111 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define CREATE_DEST_IMAGE(f)                                                    \
-    if (false == create)                                                        \
-    {                                                                           \
-        if (NULL == dst->pixel)                                                 \
-        {                                                                       \
-            LOG_E("dst image no pixel buffer");                                 \
-            return -1;                                                          \
-        }                                                                       \
-        if ((src->w != dst->w) ||                                               \
-            (src->h != dst->h) ||                                               \
-            (dst->bpp != format_to_bpp(f)) ||                                   \
-            (dst->format != f))                                                 \
-        {                                                                       \
-            LOG_E("dst image format error");                                    \
-            return -1;                                                          \
-        }                                                                       \
-    }                                                                           \
-    else                                                                        \
-    {                                                                           \
-        dst->w = src->w;                                                        \
-        dst->h = src->h;                                                        \
-        dst->bpp = format_to_bpp(f);                                            \
-        dst->format = f;                                                        \
-        if (dst->pixel)                                                         \
-        {                                                                       \
-            LOG_W("free old pixel buffer %p", dst->pixel);                      \
-            rt_free_align(dst->pixel);                                          \
-            dst->pixel = NULL;                                                  \
-        }                                                                       \
-        dst->pixel = (uint8_t *)rt_malloc_align(dst->w * dst->h * dst->bpp, 8); \
-        if (NULL == dst->pixel)                                                 \
-        {                                                                       \
-            LOG_E("Malloc failed");                                             \
-            return -1;                                                          \
-        }                                                                       \
-    }
+#define CREATE_DEST_IMAGE(f)                                                   \
+  if (false == create) {                                                       \
+    if (NULL == dst->mPixel) {                                                 \
+      LOG_E("dst image no pixel buffer");                                      \
+      return -1;                                                               \
+    }                                                                          \
+    if ((src->mWidth != dst->mWidth) || (src->mHeight != dst->mHeight) ||      \
+        (dst->mBpp != format_to_bpp(f)) || (dst->mFormat != f)) {              \
+      LOG_E("dst image format error");                                         \
+      return -1;                                                               \
+    }                                                                          \
+  } else {                                                                     \
+    dst->mWidth = src->mWidth;                                                 \
+    dst->mHeight = src->mHeight;                                               \
+    dst->mBpp = format_to_bpp(f);                                              \
+    dst->mFormat = f;                                                          \
+    if (dst->mPixel) {                                                         \
+      LOG_W("free old pixel buffer %p", dst->mPixel);                          \
+      rt_free_align(dst->mPixel);                                              \
+      dst->mPixel = NULL;                                                      \
+    }                                                                          \
+    dst->mPixel =                                                              \
+        (uint8_t *)rt_malloc_align(dst->mWidth * dst->mHeight * dst->mBpp, 8); \
+    if (NULL == dst->mPixel) {                                                 \
+      LOG_E("Malloc failed");                                                  \
+      return -1;                                                               \
+    }                                                                          \
+  }
 
 namespace K210
 {
 
     Image::Image()
     {
-        w = 0;
-        h = 0;
-        bpp = 0;
-        format = IMAGE_FORMAT_INVALID;
-        pixel = NULL;
-        user_buffer = false;
-        buffer_not_align = false;
+        mWidth = 0;
+        mHeight = 0;
+        mBpp = 0;
+        mFormat = IMAGE_FORMAT_INVALID;
+        mPixel = NULL;
+        mUserBuffer = false;
+        mBufferNotAlign = false;
     }
 
     Image::Image(uint32_t width, uint32_t height, image_format_t f, bool create)
     {
-        w = width;
-        h = height;
-        format = f;
-        bpp = format_to_bpp(f);
-        user_buffer = false;
-        buffer_not_align = false;
+        mWidth = width;
+        mHeight = height;
+        mFormat = f;
+        mBpp = format_to_bpp(f);
+        mUserBuffer = false;
+        mBufferNotAlign = false;
 
         if(create)
         {
-            pixel = (uint8_t *)rt_malloc_align(w * h * bpp, 8);
+            mPixel = (uint8_t *)rt_malloc_align(mWidth * mHeight * mBpp, 8);
 
-            if(NULL == pixel)
+            if(NULL == mPixel)
             {
                 LOG_E("Malloc failed");
             }
         }
         else
         {
-            pixel = NULL;
+            mPixel = NULL;
         }
     }
 
     Image::Image(uint32_t width, uint32_t height, image_format_t f, uint8_t *buffer)
     {
-        w = width;
-        h = height;
-        format = f;
-        bpp = format_to_bpp(f);
-        pixel = buffer;
-        user_buffer = true;
-        buffer_not_align = false;
+        mWidth = width;
+        mHeight = height;
+        mFormat = f;
+        mBpp = format_to_bpp(f);
+        mPixel = buffer;
+        mUserBuffer = true;
+        mBufferNotAlign = false;
     }
 
     Image::~Image()
     {
-        if(pixel && (false == user_buffer))
+        if(mPixel && (false == mUserBuffer))
         {
-            if(buffer_not_align)
+            if(mBufferNotAlign)
             {
-                rt_free(pixel);
+                rt_free(mPixel);
             }
             else
             {
-                rt_free_align(pixel);
+                rt_free_align(mPixel);
             }
         }
     }
 
     int Image::cut(Image *src, Image *dst, rectangle_t &r, bool create)
     {
-        uint32_t ow = src->w; /* origin image width */
-        uint32_t oh = src->h; /* origin image height */
+        uint32_t ow = src->mWidth; /* origin image width */
+        uint32_t oh = src->mHeight; /* origin image height */
 
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
         }
 
-        if((false == create) && (NULL == dst->pixel))
+        if((false == create) && (NULL == dst->mPixel))
         {
             LOG_E("dst image no pixel buffer");
             return -1;
@@ -168,29 +160,29 @@ namespace K210
             return -1;
         }
 
-        dst->w = r.w;
-        dst->h = r.h;
-        dst->bpp = src->bpp;
-        dst->format = src->format;
+        dst->mWidth = r.w;
+        dst->mHeight = r.h;
+        dst->mBpp = src->mBpp;
+        dst->mFormat = src->mFormat;
 
         if(true == create)
         {
-            if (dst->pixel)
+            if (dst->mPixel)
             {
-                LOG_W("free old pixel buffer %p", dst->pixel);
-                rt_free_align(dst->pixel);
-                dst->pixel = NULL;
+                LOG_W("free old pixel buffer %p", dst->mPixel);
+                rt_free_align(dst->mPixel);
+                dst->mPixel = NULL;
             }
 
-            dst->pixel = (uint8_t *)rt_malloc_align(dst->w * dst->h * dst->bpp, 8);
-            if (NULL == dst->pixel)
+            dst->mPixel = (uint8_t *)rt_malloc_align(dst->mWidth * dst->mHeight * dst->mBpp, 8);
+            if (NULL == dst->mPixel)
             {
                 LOG_E("Malloc failed");
                 return -1;
             }
         }
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         case IMAGE_FORMAT_RGB565:
@@ -198,34 +190,34 @@ namespace K210
         {
             for (uint32_t i = 0; i < r.h; i++)
             {
-                memcpy(dst->pixel + i * r.w * dst->bpp, src->pixel + (ow * (i + r.y) + r.x) * src->bpp, r.w * dst->bpp);
+                memcpy(dst->mPixel + i * r.w * dst->mBpp, src->mPixel + (ow * (i + r.y) + r.x) * src->mBpp, r.w * dst->mBpp);
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             // copy r channel
             for (uint32_t i = 0; i < r.h; i++)
             {
-                memcpy(dst->pixel + i * r.w + r.w * r.h * 0, src->pixel + ow * (i + r.y) + r.x + ow * oh * 0, r.w);
+                memcpy(dst->mPixel + i * r.w + r.w * r.h * 0, src->mPixel + ow * (i + r.y) + r.x + ow * oh * 0, r.w);
             }
 
             // copy g channel
             for (uint32_t i = 0; i < r.h; i++)
             {
-                memcpy(dst->pixel + i * r.w + r.w * r.h * 1, src->pixel + ow * (i + r.y) + r.x + ow * oh * 1, r.w);
+                memcpy(dst->mPixel + i * r.w + r.w * r.h * 1, src->mPixel + ow * (i + r.y) + r.x + ow * oh * 1, r.w);
             }
 
             // copy b channel
             for (uint32_t i = 0; i < r.h; i++)
             {
-                memcpy(dst->pixel + i * r.w + r.w * r.h * 2, src->pixel + ow * (i + r.y) + r.x + ow * oh * 2, r.w);
+                memcpy(dst->mPixel + i * r.w + r.w * r.h * 2, src->mPixel + ow * (i + r.y) + r.x + ow * oh * 2, r.w);
             }
         }
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -252,63 +244,63 @@ namespace K210
 
     int Image::resize(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
     {
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
         }
 
-        if((false == create) && (NULL == dst->pixel))
+        if((false == create) && (NULL == dst->mPixel))
         {
             LOG_E("dst image no pixel buffer");
             return -1;
         }
 
-        dst->w = width;
-        dst->h = height;
-        dst->bpp = src->bpp;
-        dst->format = src->format;
+        dst->mWidth = width;
+        dst->mHeight = height;
+        dst->mBpp = src->mBpp;
+        dst->mFormat = src->mFormat;
 
         if(true == create)
         {
-            if (dst->pixel)
+            if (dst->mPixel)
             {
-                LOG_W("free old pixel buffer %p", dst->pixel);
-                rt_free_align(dst->pixel);
-                dst->pixel = NULL;
+                LOG_W("free old pixel buffer %p", dst->mPixel);
+                rt_free_align(dst->mPixel);
+                dst->mPixel = NULL;
             }
 
-            dst->pixel = (uint8_t *)rt_malloc_align(dst->w * dst->h * dst->bpp, 8);
-            if (NULL == dst->pixel)
+            dst->mPixel = (uint8_t *)rt_malloc_align(dst->mWidth * dst->mHeight * dst->mBpp, 8);
+            if (NULL == dst->mPixel)
             {
                 LOG_E("Malloc failed");
                 return -1;
             }
         }
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         {
-            uint8_t *srcImg = src->pixel;
-            uint8_t *dstImg = dst->pixel;
+            uint8_t *srcImg = src->mPixel;
+            uint8_t *dstImg = dst->mPixel;
 
-            float xf, sx = (float)(src->w) / dst->w;
-            float yf, sy = (float)(src->h) / dst->h;
+            float xf, sx = (float)(src->mWidth) / dst->mWidth;
+            float yf, sy = (float)(src->mHeight) / dst->mHeight;
             int x, y, x0, y0, x1, y1, val_x1, val_y1;
 
-            if ((src->w == dst->w) && (src->h == dst->h)) // just copy
+            if ((src->mWidth == dst->mWidth) && (src->mHeight == dst->mHeight)) // just copy
             {
-                memcpy(dstImg, srcImg, src->w * src->h * src->bpp);
+                memcpy(dstImg, srcImg, src->mWidth * src->mHeight * src->mBpp);
             }
-            else if ((src->w > dst->w) || (src->h > dst->h)) // scale down
+            else if ((src->mWidth > dst->mWidth) || (src->mHeight > dst->mHeight)) // scale down
             {
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
                     y0 = y * sy;
                     y1 = (y + 1) * sy;
 
-                    for (x = 0; x < dst->w; x++)
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         int sum, xx, yy;
 
@@ -320,31 +312,31 @@ namespace K210
                         {
                             for (xx = x0; xx <= x1; xx++)
                             {
-                                sum += srcImg[yy * src->w + xx];
+                                sum += srcImg[yy * src->mWidth + xx];
                             }
                         }
-                        dstImg[y * dst->w + x] = sum / ((y1 - y0 + 1) * (x1 - x0 + 1));
+                        dstImg[y * dst->mWidth + x] = sum / ((y1 - y0 + 1) * (x1 - x0 + 1));
                     }
                 }
             }
             else // scale up
             {
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
                     yf = (y + 0.5) * sy - 0.5;
                     y0 = (int)yf;
                     y1 = y0 + 1;
-                    val_y1 = y0 < src->h - 1 ? y1 : y0;
-                    for (x = 0; x < dst->w; x++)
+                    val_y1 = y0 < src->mHeight - 1 ? y1 : y0;
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         xf = (x + 0.5) * sx - 0.5;
                         x0 = (int)xf;
                         x1 = x0 + 1;
-                        val_x1 = x0 < src->w - 1 ? x1 : x0;
-                        dstImg[y * dst->w + x] = (uint8_t)(srcImg[y0 * src->w + x0] * (x1 - xf) * (y1 - yf) +
-                                                      srcImg[y0 * src->w + val_x1] * (xf - x0) * (y1 - yf) +
-                                                      srcImg[val_y1 * src->w + x0] * (x1 - xf) * (yf - y0) +
-                                                      srcImg[val_y1 * src->w + val_x1] * (xf - x0) * (yf - y0));
+                        val_x1 = x0 < src->mWidth - 1 ? x1 : x0;
+                        dstImg[y * dst->mWidth + x] = (uint8_t)(srcImg[y0 * src->mWidth + x0] * (x1 - xf) * (y1 - yf) +
+                                                      srcImg[y0 * src->mWidth + val_x1] * (xf - x0) * (y1 - yf) +
+                                                      srcImg[val_y1 * src->mWidth + x0] * (x1 - xf) * (yf - y0) +
+                                                      srcImg[val_y1 * src->mWidth + val_x1] * (xf - x0) * (yf - y0));
                     }
                 }
             }
@@ -352,27 +344,27 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB565:
         {
-            uint16_t *srcImg = (uint16_t *)src->pixel;
-            uint16_t *dstImg = (uint16_t *)dst->pixel;
+            uint16_t *srcImg = (uint16_t *)src->mPixel;
+            uint16_t *dstImg = (uint16_t *)dst->mPixel;
 
-            float sx = (float)(src->w) / dst->w;
-            float sy = (float)(src->h) / dst->h;
+            float sx = (float)(src->mWidth) / dst->mWidth;
+            float sy = (float)(src->mHeight) / dst->mHeight;
             int x, y, x0, y0;
             uint16_t x1, x2, y1, y2;
 
-            if ((src->w == dst->w) && (src->h == dst->h)) // just copy
+            if ((src->mWidth == dst->mWidth) && (src->mHeight == dst->mHeight)) // just copy
             {
-                memcpy(dstImg, srcImg, src->w * src->h * src->bpp);
+                memcpy(dstImg, srcImg, src->mWidth * src->mHeight * src->mBpp);
             }
-            else if ((src->w > dst->w) || (src->h > dst->h)) // scale down
+            else if ((src->mWidth > dst->mWidth) || (src->mHeight > dst->mHeight)) // scale down
             {
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
                     y0 = y * sy;
-                    for (x = 0; x < dst->w; x++)
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         x0 = x * sx;
-                        dstImg[y * dst->w + x] = srcImg[y0 * src->w + x0];
+                        dstImg[y * dst->mWidth + x] = srcImg[y0 * src->mWidth + x0];
                     }
                 }
             }
@@ -381,9 +373,9 @@ namespace K210
                 float x_src, y_src;
                 float temp1, temp2;
                 uint8_t temp_r, temp_g, temp_b;
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
-                    for (x = 0; x < dst->w; x++)
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         x_src = (x + 0.5f) * sx - 0.5f;
                         y_src = (y + 0.5f) * sy - 0.5f;
@@ -392,25 +384,25 @@ namespace K210
                         y1 = (uint16_t)y_src;
                         y2 = y1 + 1;
 
-                        if (x2 >= src->w || y2 >= src->h)
+                        if (x2 >= src->mWidth || y2 >= src->mHeight)
                         {
-                            dstImg[x + y * dst->w] = srcImg[x1 + y1 * src->w];
+                            dstImg[x + y * dst->mWidth] = srcImg[x1 + y1 * src->mWidth];
                             continue;
                         }
 
-                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->w]);
-                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y2 * src->w]);
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
                         temp_r = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_G6(srcImg[x1 + y1 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_G6(srcImg[x2 + y1 * src->w]);
-                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_G6(srcImg[x1 + y2 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_G6(srcImg[x2 + y2 * src->w]);
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_G6(srcImg[x1 + y2 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_G6(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_G6(srcImg[x2 + y1 * src->mWidth]);
                         temp_g = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_B5(srcImg[x1 + y1 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_B5(srcImg[x2 + y1 * src->w]);
-                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_B5(srcImg[x1 + y2 * src->w]) + (x_src - x1) * COLOR_RGB565_TO_B5(srcImg[x2 + y2 * src->w]);
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
                         temp_b = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        dstImg[x + y * dst->w] = COLOR_R5_G6_B5_TO_RGB565(temp_r, temp_g, temp_b);
+                        dstImg[x + y * dst->mWidth] = COLOR_R5_G6_B5_TO_RGB565(temp_r, temp_g, temp_b);
                     }
                 }
             }
@@ -418,29 +410,29 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB888:
         {
-            uint8_t *srcImg = src->pixel;
-            uint8_t *dstImg = dst->pixel;
+            uint8_t *srcImg = src->mPixel;
+            uint8_t *dstImg = dst->mPixel;
 
-            float sx = (float)(src->w) / dst->w;
-            float sy = (float)(src->h) / dst->h;
+            float sx = (float)(src->mWidth) / dst->mWidth;
+            float sy = (float)(src->mHeight) / dst->mHeight;
             int x, y, x0, y0;
             uint16_t x1, x2, y1, y2;
 
-            if ((src->w == dst->w) && (src->h == dst->h)) // just copy
+            if ((src->mWidth == dst->mWidth) && (src->mHeight == dst->mHeight)) // just copy
             {
-                memcpy(dstImg, srcImg, src->w * src->h * src->bpp);
+                memcpy(dstImg, srcImg, src->mWidth * src->mHeight * src->mBpp);
             }
-            else if ((src->w > dst->w) || (src->h > dst->h)) // scale down
+            else if ((src->mWidth > dst->mWidth) || (src->mHeight > dst->mHeight)) // scale down
             {
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
                     y0 = y * sy;
-                    for (x = 0; x < dst->w; x++)
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         x0 = x * sx;
-                        dstImg[(y * dst->w + x) * src->bpp + 0] = srcImg[(y0 * src->w + x0) * src->bpp + 0];
-                        dstImg[(y * dst->w + x) * src->bpp + 1] = srcImg[(y0 * src->w + x0) * src->bpp + 1];
-                        dstImg[(y * dst->w + x) * src->bpp + 2] = srcImg[(y0 * src->w + x0) * src->bpp + 2];
+                        dstImg[(y * dst->mWidth + x) * src->mBpp + 0] = srcImg[(y0 * src->mWidth + x0) * src->mBpp + 0];
+                        dstImg[(y * dst->mWidth + x) * src->mBpp + 1] = srcImg[(y0 * src->mWidth + x0) * src->mBpp + 1];
+                        dstImg[(y * dst->mWidth + x) * src->mBpp + 2] = srcImg[(y0 * src->mWidth + x0) * src->mBpp + 2];
                     }
                 }
             }
@@ -449,9 +441,9 @@ namespace K210
                 float x_src, y_src;
                 float temp1, temp2;
                 uint8_t temp_r, temp_g, temp_b;
-                for (y = 0; y < dst->h; y++)
+                for (y = 0; y < dst->mHeight; y++)
                 {
-                    for (x = 0; x < dst->w; x++)
+                    for (x = 0; x < dst->mWidth; x++)
                     {
                         x_src = (x + 0.5f) * sx - 0.5f;
                         y_src = (y + 0.5f) * sy - 0.5f;
@@ -460,33 +452,33 @@ namespace K210
                         y1 = (uint16_t)y_src;
                         y2 = y1 + 1;
 
-                        if (x2 >= src->w || y2 >= src->h)
+                        if (x2 >= src->mWidth || y2 >= src->mHeight)
                         {
-                            dstImg[x + y * dst->w] = srcImg[x1 + y1 * src->w];
+                            dstImg[x + y * dst->mWidth] = srcImg[x1 + y1 * src->mWidth];
                             continue;
                         }
 
-                        temp1 = (x2 - x_src) * srcImg[(x1 + y1 * src->w) * src->bpp + 0] + (x_src - x1) * srcImg[(x2 + y1 * src->w) * src->bpp + 0];
-                        temp2 = (x2 - x_src) * srcImg[(x1 + y2 * src->w) * src->bpp + 0] + (x_src - x1) * srcImg[(x2 + y2 * src->w) * src->bpp + 0];
+                        temp1 = (x2 - x_src) * srcImg[(x1 + y1 * src->mWidth)] + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
                         temp_r = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * srcImg[(x1 + y1 * src->w) * src->bpp + 1] + (x_src - x1) * srcImg[(x2 + y1 * src->w) * src->bpp + 1];
-                        temp2 = (x2 - x_src) * srcImg[(x1 + y2 * src->w) * src->bpp + 1] + (x_src - x1) * srcImg[(x2 + y2 * src->w) * src->bpp + 1];
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
                         temp_g = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * srcImg[(x1 + y1 * src->w) * src->bpp + 2] + (x_src - x1) * srcImg[(x2 + y1 * src->w) * src->bpp + 2];
-                        temp2 = (x2 - x_src) * srcImg[(x1 + y2 * src->w) * src->bpp + 2] + (x_src - x1) * srcImg[(x2 + y2 * src->w) * src->bpp + 2];
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
                         temp_b = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        dstImg[(x + y * dst->w) * src->bpp + 0] = temp_r;
-                        dstImg[(x + y * dst->w) * src->bpp + 1] = temp_g;
-                        dstImg[(x + y * dst->w) * src->bpp + 2] = temp_b;
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 0] = temp_r;
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 1] = temp_g;
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 2] = temp_b;
                     }
                 }
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
             uint16_t x1, x2, y1, y2;
             float w_scale, h_scale;
@@ -494,23 +486,27 @@ namespace K210
             float x_src, y_src;
 
             uint8_t *r_src, *g_src, *b_src, *r_dst, *g_dst, *b_dst;
+            uint8_t temp_r, temp_g, temp_b;
             uint16_t w_src, h_src, w_dst, h_dst;
 
-            if ((src->w == dst->w) && (src->h == dst->h)) // just copy
+            uint8_t *srcImg = src->mPixel;
+            uint8_t *dstImg = dst->mPixel;
+
+            if ((src->mWidth == dst->mWidth) && (src->mHeight == dst->mHeight)) // just copy
             {
-                memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
+                memcpy(dst->mPixel, src->mPixel, src->mWidth * src->mHeight * src->mBpp);
             }
             else
             {
-                w_src = src->w;
-                h_src = src->h;
-                r_src = src->pixel;
+                w_src = src->mWidth;
+                h_src = src->mHeight;
+                r_src = src->mPixel;
                 g_src = r_src + w_src * h_src;
                 b_src = g_src + w_src * h_src;
 
-                w_dst = dst->w;
-                h_dst = dst->h;
-                r_dst = dst->pixel;
+                w_dst = dst->mWidth;
+                h_dst = dst->mHeight;
+                r_dst = dst->mPixel;
                 g_dst = r_dst + w_dst * h_dst;
                 b_dst = g_dst + w_dst * h_dst;
 
@@ -522,9 +518,9 @@ namespace K210
                     for (uint16_t x = 0; x < w_dst; x++)
                     {
                         x_src = (x + 0.5f) * w_scale - 0.5f;
+                        y_src = (y + 0.5f) * h_scale - 0.5f;
                         x1 = (uint16_t)x_src;
                         x2 = x1 + 1;
-                        y_src = (y + 0.5f) * h_scale - 0.5f;
                         y1 = (uint16_t)y_src;
                         y2 = y1 + 1;
 
@@ -537,16 +533,21 @@ namespace K210
                         }
 
                         temp1 = (x2 - x_src) * r_src[x1 + y1 * w_src] + (x_src - x1) * r_src[x2 + y1 * w_src];
-                        temp2 = (x2 - x_src) * r_src[x1 + y2 * w_src] + (x_src - x1) * r_src[x2 + y2 * w_src];
-                        r_dst[x + y * w_dst] = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp_r = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * g_src[x1 + y1 * w_src] + (x_src - x1) * g_src[x2 + y1 * w_src];
-                        temp2 = (x2 - x_src) * g_src[x1 + y2 * w_src] + (x_src - x1) * g_src[x2 + y2 * w_src];
-                        g_dst[x + y * w_dst] = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp_g = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
 
-                        temp1 = (x2 - x_src) * b_src[x1 + y1 * w_src] + (x_src - x1) * b_src[x2 + y1 * w_src];
-                        temp2 = (x2 - x_src) * b_src[x1 + y2 * w_src] + (x_src - x1) * b_src[x2 + y2 * w_src];
-                        b_dst[x + y * w_dst] = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
+                        temp1 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y1 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp2 = (x2 - x_src) * COLOR_RGB565_TO_R5(srcImg[x1 + y2 * src->mWidth]) + (x_src - x1) * COLOR_RGB565_TO_R5(srcImg[x2 + y1 * src->mWidth]);
+                        temp_b = (uint8_t)((y2 - y_src) * temp1 + (y_src - y1) * temp2);
+
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 0] = temp_r;
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 1] = temp_g;
+                        dstImg[(x + y * dst->mWidth) * src->mBpp + 2] = temp_b;
                     }
                 }
             }
@@ -554,7 +555,7 @@ namespace K210
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -581,7 +582,7 @@ namespace K210
 
     int Image::to_grayscale(Image *src, Image *dst, bool create)
     {
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
@@ -589,21 +590,21 @@ namespace K210
 
         CREATE_DEST_IMAGE(IMAGE_FORMAT_GRAYSCALE)
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         {
             LOG_W("Convert grayscale to grayscale, copy the image");
 
-            memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
+            memcpy(dst->mPixel, src->mPixel, src->mWidth * src->mHeight * src->mBpp);
         }
         break;
         case IMAGE_FORMAT_RGB565:
         {
-            uint8_t *grayscale = dst->pixel;
-            uint8_t *end = grayscale + dst->w * dst->h * dst->bpp;
+            uint8_t *grayscale = dst->mPixel;
+            uint8_t *end = grayscale + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint16_t pixel, *rgb565 = (uint16_t *)src->pixel;
+            uint16_t pixel, *rgb565 = (uint16_t *)src->mPixel;
 
             while(end != grayscale)
             {
@@ -614,10 +615,10 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB888:
         {
-            uint8_t *grayscale = dst->pixel;
-            uint8_t *end = grayscale + dst->w * dst->h * dst->bpp;
+            uint8_t *grayscale = dst->mPixel;
+            uint8_t *end = grayscale + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint8_t r, g, b, *rgb888 = src->pixel;
+            uint8_t r, g, b, *rgb888 = src->mPixel;
 
             while (end != grayscale)
             {
@@ -630,14 +631,14 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
-            uint8_t *grayscale = dst->pixel;
-            uint8_t *end = grayscale + dst->w * dst->h * dst->bpp;
+            uint8_t *grayscale = dst->mPixel;
+            uint8_t *end = grayscale + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint8_t r, *sr = src->pixel;
-            uint8_t g, *sg = sr + src->w * src->h;
-            uint8_t b, *sb = sg + src->w * src->h;
+            uint8_t r, *sr = src->mPixel;
+            uint8_t g, *sg = sr + src->mWidth * src->mHeight;
+            uint8_t b, *sb = sg + src->mWidth * src->mHeight;
 
             while (end != grayscale)
             {
@@ -651,7 +652,7 @@ namespace K210
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -678,7 +679,7 @@ namespace K210
 
     int Image::to_rgb565(Image *src, Image *dst, bool create)
     {
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
@@ -686,19 +687,19 @@ namespace K210
 
         CREATE_DEST_IMAGE(IMAGE_FORMAT_RGB565)
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         {
-            uint16_t *rgb565 = (uint16_t *)dst->pixel;
-            uint16_t *end = rgb565 + dst->w * dst->h;
+            uint16_t *rgb565 = (uint16_t *)dst->mPixel;
+            uint16_t *end = rgb565 + dst->mWidth * dst->mHeight;
 
-            uint8_t gray, *grayscale = src->pixel;
+            uint8_t gray, *grayscale = src->mPixel;
 
             while (end != rgb565)
             {
                 gray = *grayscale++;
-                *rgb565++ = yuv_to_rgb565(gray, 0, 0);
+                *rgb565++ = COLOR_YUV_TO_RGB565(gray, 0, 0);
             }
         }
         break;
@@ -706,15 +707,15 @@ namespace K210
         {
             LOG_W("Convert rgb565 to rgb565, copy the image");
 
-            memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
+            memcpy(dst->mPixel, src->mPixel, src->mWidth * src->mHeight * src->mBpp);
         }
         break;
         case IMAGE_FORMAT_RGB888:
         {
-            uint16_t *rgb565 = (uint16_t *)dst->pixel;
-            uint16_t *end = rgb565 + dst->w * dst->h;
+            uint16_t *rgb565 = (uint16_t *)dst->mPixel;
+            uint16_t *end = rgb565 + dst->mWidth * dst->mHeight;
 
-            uint8_t r, g, b, *rgb888 = src->pixel;
+            uint8_t r, g, b, *rgb888 = src->mPixel;
 
             while (end != rgb565)
             {
@@ -727,14 +728,14 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
-            uint16_t *rgb565 = (uint16_t *)dst->pixel;
-            uint16_t *end = rgb565 + dst->w * dst->h;
+            uint16_t *rgb565 = (uint16_t *)dst->mPixel;
+            uint16_t *end = rgb565 + dst->mWidth * dst->mHeight;
 
-            uint8_t r, *sr = src->pixel;
-            uint8_t g, *sg = sr + src->w * src->h;
-            uint8_t b, *sb = sg + src->w * src->h;
+            uint8_t r, *sr = src->mPixel;
+            uint8_t g, *sg = sr + src->mWidth * src->mHeight;
+            uint8_t b, *sb = sg + src->mWidth * src->mHeight;
 
             while (end != rgb565)
             {
@@ -748,7 +749,7 @@ namespace K210
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -775,7 +776,7 @@ namespace K210
 
     int Image::to_rgb888(Image *src, Image *dst, bool create)
     {
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
@@ -783,14 +784,14 @@ namespace K210
 
         CREATE_DEST_IMAGE(IMAGE_FORMAT_RGB888)
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         {
-            uint8_t *rgb888 = dst->pixel;
-            uint8_t *end = rgb888 + dst->w * dst->h * dst->bpp;
+            uint8_t *rgb888 = dst->mPixel;
+            uint8_t *end = rgb888 + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint8_t gray, *grayscale = src->pixel;
+            uint8_t gray, *grayscale = src->mPixel;
 
             while(end != rgb888)
             {
@@ -803,10 +804,10 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB565:
         {
-            uint8_t *rgb888 = dst->pixel;
-            uint8_t *end = rgb888 + dst->w * dst->h * dst->bpp;
+            uint8_t *rgb888 = dst->mPixel;
+            uint8_t *end = rgb888 + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint16_t pixel, *rgb565 = (uint16_t *)src->pixel;
+            uint16_t pixel, *rgb565 = (uint16_t *)src->mPixel;
 
             while(end != rgb888)
             {
@@ -824,19 +825,19 @@ namespace K210
         {
             LOG_W("Convert rgb888 to rgb888, copy the image");
 
-            memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
+            memcpy(dst->mPixel, src->mPixel, src->mWidth * src->mHeight * src->mBpp);
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
-            uint8_t *rgb888 = dst->pixel;
-            uint8_t *end = rgb888 + dst->w * dst->h * dst->bpp;
+            uint8_t *rgb888 = dst->mPixel;
+            uint8_t *end = rgb888 + dst->mWidth * dst->mHeight * dst->mBpp;
 
-            uint8_t *sr = src->pixel;
-            uint8_t *sg = sr + src->w * src->h;
-            uint8_t *sb = sg + src->w * src->h;
+            uint8_t *sr = src->mPixel;
+            uint8_t *sg = sr + src->mWidth * src->mHeight;
+            uint8_t *sb = sg + src->mWidth * src->mHeight;
 
-            while(end != rgb888)
+            while (end != rgb888)
             {
                 rgb888[0] = *sr++;
                 rgb888[1] = *sg++;
@@ -848,7 +849,7 @@ namespace K210
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -873,27 +874,27 @@ namespace K210
         return img;
     }
 
-    int Image::to_r8g8b8(Image *src, Image *dst, bool create)
+    int Image::to_rgbp888(Image *src, Image *dst, bool create)
     {
-        if (NULL == src->pixel)
+        if (NULL == src->mPixel)
         {
             LOG_E("Origin image no pixels");
             return -1;
         }
 
-        CREATE_DEST_IMAGE(IMAGE_FORMAT_R8G8B8)
+        CREATE_DEST_IMAGE(IMAGE_FORMAT_RGBP888)
 
-        switch (src->format)
+        switch (src->mFormat)
         {
         case IMAGE_FORMAT_GRAYSCALE:
         {
-            uint8_t *dr = dst->pixel;
-            uint8_t *dg = dr + dst->w * dst->h;
-            uint8_t *db = dg + dst->w * dst->h;
+            uint8_t *dr = dst->mPixel;
+            uint8_t *dg = dr + dst->mWidth * dst->mHeight;
+            uint8_t *db = dg + dst->mWidth * dst->mHeight;
 
             uint8_t *end = dg;
 
-            uint8_t gray, *grayscale = src->pixel;
+            uint8_t gray, *grayscale = src->mPixel;
 
             while(end != dr)
             {
@@ -905,13 +906,13 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB565:
         {
-            uint8_t *dr = dst->pixel;
-            uint8_t *dg = dr + dst->w * dst->h;
-            uint8_t *db = dg + dst->w * dst->h;
+            uint8_t *dr = dst->mPixel;
+            uint8_t *dg = dr + dst->mWidth * dst->mHeight;
+            uint8_t *db = dg + dst->mWidth * dst->mHeight;
 
             uint8_t *end = dg;
 
-            uint16_t pixel, *rgb565 = (uint16_t *)src->pixel;
+            uint16_t pixel, *rgb565 = (uint16_t *)src->mPixel;
 
             while(end != dr)
             {
@@ -925,13 +926,13 @@ namespace K210
         break;
         case IMAGE_FORMAT_RGB888:
         {
-            uint8_t *dr = dst->pixel;
-            uint8_t *dg = dr + dst->w * dst->h;
-            uint8_t *db = dg + dst->w * dst->h;
+            uint8_t *dr = dst->mPixel;
+            uint8_t *dg = dr + dst->mWidth * dst->mHeight;
+            uint8_t *db = dg + dst->mWidth * dst->mHeight;
 
             uint8_t *end = dg;
 
-            uint8_t *rgb888 = src->pixel;
+            uint8_t *rgb888 = src->mPixel;
 
             while(end != dr)
             {
@@ -943,16 +944,16 @@ namespace K210
             }
         }
         break;
-        case IMAGE_FORMAT_R8G8B8:
+        case IMAGE_FORMAT_RGBP888:
         {
-            LOG_W("Convert r8g8b8 to r8g8b8, copy the image");
+            LOG_W("Convert rgbp888 to rgbp888, copy the image");
 
-            memcpy(dst->pixel, src->pixel, src->w * src->h * src->bpp);
+            memcpy(dst->mPixel, src->mPixel, src->mWidth * src->mHeight * src->mBpp);
         }
         break;
         default:
         {
-            LOG_E("Unsupport format %d", dst->format);
+            LOG_E("Unsupport format %d", dst->mFormat);
             return -1;
         }
         break;
@@ -961,15 +962,1413 @@ namespace K210
         return 0;
     }
 
-    int Image::to_r8g8b8(Image *dst, bool create)
+    int Image::to_rgbp888(Image *dst, bool create)
     {
-        return to_r8g8b8(this, dst, create);
+        return to_rgbp888(this, dst, create);
     }
 
-    Image * Image::to_r8g8b8(void)
+    Image * Image::to_rgbp888(void)
     {
         Image *img = new Image();
-        if(0x00 != to_r8g8b8(this, img, true))
+        if(0x00 != to_rgbp888(this, img, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    #define GET_PIXEL_PTR(img, x, y) \
+        ((img)->mPixel + ((y) * (img)->mWidth + (x)) * (img)->mBpp)
+
+    int Image::cut_to_new_format(Image *src, Image *dst, rectangle_t &r, image_format_t new_format, bool create)
+    {
+        if (NULL == src->mPixel)
+        {
+            LOG_E("Origin image no pixels");
+            return -1;
+        }
+
+        uint32_t ow = src->mWidth; /* origin image width */
+        uint32_t oh = src->mHeight; /* origin image height */
+
+        uint32_t dst_w = r.w;
+        uint32_t dst_h = r.h;
+        image_format_t dst_format = new_format;
+        uint32_t dst_bpp = format_to_bpp(dst_format);
+
+        if ((r.x > ow) || ((r.x + r.w) > ow) ||
+            (r.y > oh) || ((r.y + r.h) > oh))
+        {
+            LOG_E("cut out image too large for origin image.");
+            return -1;
+        }
+
+        // --- Allocation and initialization block (Unchanged) ---
+        if (false == create)
+        {
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("dst image no pixel buffer");
+                return -1;
+            }
+            if ((dst_w != dst->mWidth) ||
+                (dst_h != dst->mHeight) ||
+                (dst_bpp != dst->mBpp) ||
+                (dst_format != dst->mFormat))
+            {
+                LOG_E("dst image format or size mismatch in non-create mode.");
+                return -1;
+            }
+        }
+        else // create == true
+        {
+            // 1. Set new properties based on cut area and new format
+            dst->mWidth = dst_w;
+            dst->mHeight = dst_h;
+            dst->mBpp = dst_bpp;
+            dst->mFormat = dst_format;
+            dst->mUserBuffer = false; 
+
+            // 2. Free old buffer if present and not user-provided
+            if (dst->mPixel && !dst->mUserBuffer)
+            {
+                LOG_W("free old pixel buffer %p", dst->mPixel);
+                rt_free_align(dst->mPixel);
+                dst->mPixel = NULL;
+            }
+
+            // 3. Allocate new buffer
+            uint32_t size = dst_w * dst_h * dst_bpp;
+            dst->mPixel = (uint8_t *)rt_malloc_align(size, 8);
+
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("Malloc failed for dst buffer");
+                return -1;
+            }
+        }
+        // --- End of Allocation block ---
+
+        uint32_t x, y;
+
+        // Handle direct cut (same format)
+        if (src->mFormat == dst_format)
+        {
+            if (dst_format == IMAGE_FORMAT_RGBP888)
+            {
+                uint32_t s_plane_size = src->mWidth * src->mHeight;
+                uint32_t d_plane_size = dst_w * dst_h;
+                uint32_t bytes_to_copy = dst_w;
+
+                for (uint32_t plane = 0; plane < src->mBpp; plane++) 
+                {
+                    uint8_t *s_base = src->mPixel + s_plane_size * plane;
+                    uint8_t *d_base = dst->mPixel + d_plane_size * plane;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *s_ptr = s_base + (r.y + y) * src->mWidth + r.x;
+                        uint8_t *d_ptr = d_base + y * dst_w;
+                        memcpy(d_ptr, s_ptr, bytes_to_copy);
+                    }
+                }
+            }
+            else // Standard case for packed/contiguous formats (RGB565, RGB888, GRAYSCALE)
+            {
+                // This original logic works for packed formats (RGB565, RGB888) and single-channel (GRAYSCALE)
+                for (y = 0; y < dst_h; y++)
+                {
+                    uint8_t *src_ptr = GET_PIXEL_PTR(src, r.x, r.y + y);
+                    uint8_t *dst_ptr = GET_PIXEL_PTR(dst, 0, y);
+                    memcpy(dst_ptr, src_ptr, dst_w * dst_bpp);
+                }
+            }
+            return 0;
+        }
+        // ----------------------------------------------------------------------
+        // --- FIX ENDS HERE ---
+
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_RGB565 (2 BPP, Packed Source) ---
+        // ----------------------------------------------------------------------
+        if (src->mFormat == IMAGE_FORMAT_RGB565)
+        {
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_RGBP888: // Planar Destination
+                {
+                    uint32_t d_plane_size = dst_w * dst_h;
+                    uint8_t *d_r = dst->mPixel;
+                    uint8_t *d_g = d_r + d_plane_size;
+                    uint8_t *d_b = d_g + d_plane_size;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *src_ptr_row = (uint16_t *)GET_PIXEL_PTR(src, r.x, r.y + y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            uint32_t d_offset = y * dst_w + x; // Planar offset
+
+                            d_r[d_offset] = COLOR_RGB565_TO_R8(pixel565);
+                            d_g[d_offset] = COLOR_RGB565_TO_G8(pixel565);
+                            d_b[d_offset] = COLOR_RGB565_TO_B8(pixel565);
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_RGB888: // Packed Destination
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            
+                            dst_ptr_row[0] = COLOR_RGB565_TO_R8(pixel565);
+                            dst_ptr_row[1] = COLOR_RGB565_TO_G8(pixel565);
+                            dst_ptr_row[2] = COLOR_RGB565_TO_B8(pixel565);
+
+                            dst_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *src_ptr_row = (uint16_t *)GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint16_t pixel565 = src_ptr_row[x];
+                            
+                            #ifdef COLOR_RGB565_TO_GRAYSCALE
+                            dst_ptr_row[x] = COLOR_RGB565_TO_GRAYSCALE(pixel565);
+                            #else
+                            uint8_t r8 = COLOR_RGB565_TO_R8(pixel565);
+                            uint8_t g8 = COLOR_RGB565_TO_G8(pixel565);
+                            uint8_t b8 = COLOR_RGB565_TO_B8(pixel565);
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                            #endif
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported RGB565 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_RGB888 (3 BPP, Packed Source) ---
+        // ----------------------------------------------------------------------
+        if (src->mFormat == IMAGE_FORMAT_RGB888)
+        {
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_RGB565:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint16_t *dst_ptr_row = (uint16_t *)GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint8_t r8 = src_ptr_row[0];
+                            uint8_t g8 = src_ptr_row[1];
+                            uint8_t b8 = src_ptr_row[2];
+
+                            dst_ptr_row[x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+
+                            src_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_RGBP888: // Planar Destination
+                {
+                    uint32_t d_plane_size = dst_w * dst_h;
+                    uint8_t *d_r = dst->mPixel;
+                    uint8_t *d_g = d_r + d_plane_size;
+                    uint8_t *d_b = d_g + d_plane_size;
+
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t d_offset = y * dst_w + x; // Planar offset
+
+                            d_r[d_offset] = src_ptr_row[0];
+                            d_g[d_offset] = src_ptr_row[1];
+                            d_b[d_offset] = src_ptr_row[2];
+
+                            src_ptr_row += 3; // Source is packed
+                        }
+                    }
+                    return 0;
+                }
+
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *src_ptr_row = GET_PIXEL_PTR(src, r.x, r.y + y);
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint8_t r8 = src_ptr_row[0];
+                            uint8_t g8 = src_ptr_row[1];
+                            uint8_t b8 = src_ptr_row[2];
+                            
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                            
+                            src_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported RGB888 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_RGBP888 (3 BPP, Planar Source) ---
+        // ----------------------------------------------------------------------
+        if (src->mFormat == IMAGE_FORMAT_RGBP888)
+        {
+            // Calculate source plane pointers once
+            uint32_t s_plane_size = src->mWidth * src->mHeight;
+            uint8_t *s_r_base = src->mPixel;
+            uint8_t *s_g_base = s_r_base + s_plane_size;
+            uint8_t *s_b_base = s_g_base + s_plane_size;
+
+            switch (dst_format)
+            {
+                case IMAGE_FORMAT_RGB565:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint16_t *dst_ptr_row = (uint16_t *)GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->mWidth + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                        }
+                    }
+                    return 0;
+                }
+                case IMAGE_FORMAT_RGB888:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->mWidth + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[0] = r8;
+                            dst_ptr_row[1] = g8;
+                            dst_ptr_row[2] = b8;
+                            
+                            dst_ptr_row += 3;
+                        }
+                    }
+                    return 0;
+                }
+                case IMAGE_FORMAT_GRAYSCALE:
+                {
+                    for (y = 0; y < dst_h; y++)
+                    {
+                        uint8_t *dst_ptr_row = GET_PIXEL_PTR(dst, 0, y);
+                        
+                        for (x = 0; x < dst_w; x++)
+                        {
+                            uint32_t s_offset = (r.y + y) * src->mWidth + r.x + x;
+                            
+                            uint8_t r8 = s_r_base[s_offset];
+                            uint8_t g8 = s_g_base[s_offset];
+                            uint8_t b8 = s_b_base[s_offset];
+                            
+                            dst_ptr_row[x] = (uint8_t)((299 * r8 + 587 * g8 + 114 * b8) / 1000);
+                        }
+                    }
+                    return 0;
+                }
+                default: 
+                {
+                    LOG_E("Unsupported RGBP888 source to Dst %d", dst_format);
+                    return -1;
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // --- Conversion from IMAGE_FORMAT_GRAYSCALE (1 BPP Source) ---
+        // ----------------------------------------------------------------------
+        if (src->mFormat == IMAGE_FORMAT_GRAYSCALE)
+        {
+            LOG_E("Unsupported GRAYSCALE source to Dst %d in cut_to_new_format", dst_format);
+            return -1;
+        }
+
+        LOG_E("Unsupported format combination: Src %d to Dst %d", src->mFormat, dst_format);
+
+        return -1;
+    }
+
+    int Image::cut_to_new_format(Image *dst, rectangle_t &r, image_format_t new_format, bool create)
+    {
+        return cut_to_new_format(this, dst, r, new_format, create);
+    }
+
+    Image * Image::cut_to_new_format(rectangle_t &r, image_format_t new_format)
+    {
+        Image *img = new Image();
+
+        if (0x00 != cut_to_new_format(this, img, r, new_format, true))
+        {
+            delete img;
+            return NULL;
+        }
+
+        return img;
+    }
+
+    int Image::cut_to_rgbp888(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGBP888, create);
+    }
+
+    Image * Image::cut_to_rgbp888(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_RGBP888);
+    }
+
+    int Image::cut_to_rgb565(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGB565, create);
+    }
+
+    Image * Image::cut_to_rgb565(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_RGB565);
+    }
+
+    int Image::cut_to_rgb888(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_RGB888, create);
+    }
+
+    Image * Image::cut_to_rgb888(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_RGB888);
+    }
+
+    int Image::cut_to_grayscale(Image *dst, rectangle_t &r, bool create)
+    {
+        return cut_to_new_format(this, dst, r, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    Image * Image::cut_to_grayscale(rectangle_t &r)
+    {
+        return cut_to_new_format(r, IMAGE_FORMAT_GRAYSCALE);
+    }
+
+    int Image::resize_to_new_format(Image *src, Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create)
+    {
+        if (NULL == src->mPixel)
+        {
+            LOG_E("Origin image no pixels");
+            return -1;
+        }
+
+        // --- Allocation and initialization block ---
+        if (false == create)
+        {
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("dst image no pixel buffer");
+                return -1;
+            }
+            if ((width != dst->mWidth) ||
+                (height != dst->mHeight) ||
+                (format_to_bpp(new_format) != dst->mBpp) ||
+                (new_format != dst->mFormat))
+            {
+                LOG_E("dst image format or size mismatch in non-create mode.");
+                return -1;
+            }
+        }
+        else // create == true
+        {
+            // 1. Set new properties based on resize dimensions and new format
+            dst->mWidth = width;
+            dst->mHeight = height;
+            dst->mBpp = format_to_bpp(new_format);
+            dst->mFormat = new_format;
+            dst->mUserBuffer = false; 
+
+            // 2. Free old buffer if present and not user-provided
+            if (dst->mPixel && !dst->mUserBuffer)
+            {
+                LOG_W("free old pixel buffer %p", dst->mPixel);
+                rt_free_align(dst->mPixel);
+                dst->mPixel = NULL;
+            }
+
+            // 3. Allocate new buffer
+            uint32_t size = width * height * dst->mBpp;
+            dst->mPixel = (uint8_t *)rt_malloc_align(size, 8);
+
+            if (NULL == dst->mPixel)
+            {
+                LOG_E("Malloc failed for dst buffer");
+                return -1;
+            }
+        }
+        // --- End of Allocation block ---
+
+        if (src->mFormat == new_format)
+        {
+            return resize(src, dst, width, height, false);
+        }
+
+        float sx = (float)src->mWidth / width;
+        float sy = (float)src->mHeight / height;
+
+        // Handle different source formats
+        switch (src->mFormat)
+        {
+            case IMAGE_FORMAT_GRAYSCALE:
+            {
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                dst_ptr[y * width + x] = COLOR_YUV_TO_RGB565(gray, 0, 0);
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                uint8_t r, g, b;
+                                yuv_to_rgb888(gray, 0, 0, &r, &g, &b);
+
+                                uint32_t idx = (y * width + x) * 3;
+                                dst_ptr[idx] = r;
+                                dst_ptr[idx + 1] = g;
+                                dst_ptr[idx + 2] = b;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                uint8_t *src_ptr = src->mPixel;
+                                float val00 = src_ptr[y0 * src->mWidth + x0];
+                                float val01 = src_ptr[y0 * src->mWidth + x1];
+                                float val10 = src_ptr[y1 * src->mWidth + x0];
+                                float val11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                float interpolated = val00 * x_opposite * y_opposite +
+                                                val01 * x_ratio * y_opposite +
+                                                val10 * x_opposite * y_ratio +
+                                                val11 * x_ratio * y_ratio;
+                                
+                                uint8_t gray = (uint8_t)interpolated;
+                                uint8_t r, g, b;
+                                yuv_to_rgb888(gray, 0, 0, &r, &g, &b);
+
+                                uint32_t idx = y * width + x;
+                                dst_r[idx] = r;
+                                dst_g[idx] = g;
+                                dst_b[idx] = b;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    default:
+                        LOG_E("Unsupported conversion from GRAYSCALE to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+            
+            case IMAGE_FORMAT_RGB565:
+            {
+                uint16_t *src_ptr = (uint16_t *)src->mPixel;
+                
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation for each color component
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to grayscale and interpolate
+                                float g00 = COLOR_RGB565_TO_GRAYSCALE(p00);
+                                float g01 = COLOR_RGB565_TO_GRAYSCALE(p01);
+                                float g10 = COLOR_RGB565_TO_GRAYSCALE(p10);
+                                float g11 = COLOR_RGB565_TO_GRAYSCALE(p11);
+                                
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to RGB888 and interpolate each channel
+                                float r00 = COLOR_RGB565_TO_R8(p00);
+                                float g00 = COLOR_RGB565_TO_G8(p00);
+                                float b00 = COLOR_RGB565_TO_B8(p00);
+                                
+                                float r01 = COLOR_RGB565_TO_R8(p01);
+                                float g01 = COLOR_RGB565_TO_G8(p01);
+                                float b01 = COLOR_RGB565_TO_B8(p01);
+                                
+                                float r10 = COLOR_RGB565_TO_R8(p10);
+                                float g10 = COLOR_RGB565_TO_G8(p10);
+                                float b10 = COLOR_RGB565_TO_B8(p10);
+                                
+                                float r11 = COLOR_RGB565_TO_R8(p11);
+                                float g11 = COLOR_RGB565_TO_G8(p11);
+                                float b11 = COLOR_RGB565_TO_B8(p11);
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t idx = (y * width + x) * 3;
+                                dst_ptr[idx] = (uint8_t)r_interp;
+                                dst_ptr[idx + 1] = (uint8_t)g_interp;
+                                dst_ptr[idx + 2] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get 4 neighboring pixels
+                                uint16_t p00 = src_ptr[y0 * src->mWidth + x0];
+                                uint16_t p01 = src_ptr[y0 * src->mWidth + x1];
+                                uint16_t p10 = src_ptr[y1 * src->mWidth + x0];
+                                uint16_t p11 = src_ptr[y1 * src->mWidth + x1];
+                                
+                                // Convert to RGB components and interpolate
+                                float r00 = COLOR_RGB565_TO_R8(p00);
+                                float g00 = COLOR_RGB565_TO_G8(p00);
+                                float b00 = COLOR_RGB565_TO_B8(p00);
+                                
+                                float r01 = COLOR_RGB565_TO_R8(p01);
+                                float g01 = COLOR_RGB565_TO_G8(p01);
+                                float b01 = COLOR_RGB565_TO_B8(p01);
+                                
+                                float r10 = COLOR_RGB565_TO_R8(p10);
+                                float g10 = COLOR_RGB565_TO_G8(p10);
+                                float b10 = COLOR_RGB565_TO_B8(p10);
+                                
+                                float r11 = COLOR_RGB565_TO_R8(p11);
+                                float g11 = COLOR_RGB565_TO_G8(p11);
+                                float b11 = COLOR_RGB565_TO_B8(p11);
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t idx = y * width + x;
+                                dst_r[idx] = (uint8_t)r_interp;
+                                dst_g[idx] = (uint8_t)g_interp;
+                                dst_b[idx] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGB565 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+
+            case IMAGE_FORMAT_RGB888:
+            {
+                uint8_t *src_ptr = src->mPixel;
+
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+
+                                // Convert each pixel to grayscale and interpolate
+                                float g00 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx00], src_ptr[idx00 + 1], src_ptr[idx00 + 2]);
+                                float g01 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx01], src_ptr[idx01 + 1], src_ptr[idx01 + 2]);
+                                float g10 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx10], src_ptr[idx10 + 1], src_ptr[idx10 + 2]);
+                                float g11 = COLOR_RGB888_TO_GRAYSCALE(src_ptr[idx11], src_ptr[idx11 + 1], src_ptr[idx11 + 2]);
+
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+
+                                // Interpolate each channel separately
+                                float r00 = src_ptr[idx00];
+                                float g00 = src_ptr[idx00 + 1];
+                                float b00 = src_ptr[idx00 + 2];
+
+                                float r01 = src_ptr[idx01];
+                                float g01 = src_ptr[idx01 + 1];
+                                float b01 = src_ptr[idx01 + 2];
+
+                                float r10 = src_ptr[idx10];
+                                float g10 = src_ptr[idx10 + 1];
+                                float b10 = src_ptr[idx10 + 2];
+
+                                float r11 = src_ptr[idx11];
+                                float g11 = src_ptr[idx11 + 1];
+                                float b11 = src_ptr[idx11 + 2];
+
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+
+                                // Convert to RGB565
+                                uint8_t r8 = (uint8_t)r_interp;
+                                uint8_t g8 = (uint8_t)g_interp;
+                                uint8_t b8 = (uint8_t)b_interp;
+
+                                dst_ptr[y * width + x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGBP888:
+                    {
+                        uint32_t plane_size = width * height;
+                        uint8_t *dst_r = dst->mPixel;
+                        uint8_t *dst_g = dst_r + plane_size;
+                        uint8_t *dst_b = dst_g + plane_size;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels
+                                uint32_t idx00 = (y0 * src->mWidth + x0) * 3;
+                                uint32_t idx01 = (y0 * src->mWidth + x1) * 3;
+                                uint32_t idx10 = (y1 * src->mWidth + x0) * 3;
+                                uint32_t idx11 = (y1 * src->mWidth + x1) * 3;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_ptr[idx00];
+                                float g00 = src_ptr[idx00 + 1];
+                                float b00 = src_ptr[idx00 + 2];
+                                
+                                float r01 = src_ptr[idx01];
+                                float g01 = src_ptr[idx01 + 1];
+                                float b01 = src_ptr[idx01 + 2];
+                                
+                                float r10 = src_ptr[idx10];
+                                float g10 = src_ptr[idx10 + 1];
+                                float b10 = src_ptr[idx10 + 2];
+                                
+                                float r11 = src_ptr[idx11];
+                                float g11 = src_ptr[idx11 + 1];
+                                float b11 = src_ptr[idx11 + 2];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t dst_idx = y * width + x;
+                                dst_r[dst_idx] = (uint8_t)r_interp;
+                                dst_g[dst_idx] = (uint8_t)g_interp;
+                                dst_b[dst_idx] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGB888 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+
+            case IMAGE_FORMAT_RGBP888:
+            {
+                // Calculate source plane pointers
+                uint32_t src_plane_size = src->mWidth * src->mHeight;
+                uint8_t *src_r = src->mPixel;
+                uint8_t *src_g = src_r + src_plane_size;
+                uint8_t *src_b = src_g + src_plane_size;
+                
+                switch (new_format)
+                {
+                    case IMAGE_FORMAT_GRAYSCALE:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Convert each pixel to grayscale and interpolate
+                                float g00 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx00], src_g[idx00], src_b[idx00]);
+                                float g01 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx01], src_g[idx01], src_b[idx01]);
+                                float g10 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx10], src_g[idx10], src_b[idx10]);
+                                float g11 = COLOR_RGB888_TO_GRAYSCALE(src_r[idx11], src_g[idx11], src_b[idx11]);
+                                
+                                float interpolated = g00 * x_opposite * y_opposite +
+                                                g01 * x_ratio * y_opposite +
+                                                g10 * x_opposite * y_ratio +
+                                                g11 * x_ratio * y_ratio;
+                                
+                                dst_ptr[y * width + x] = (uint8_t)interpolated;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB565:
+                    {
+                        uint16_t *dst_ptr = (uint16_t *)dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_r[idx00];
+                                float g00 = src_g[idx00];
+                                float b00 = src_b[idx00];
+                                
+                                float r01 = src_r[idx01];
+                                float g01 = src_g[idx01];
+                                float b01 = src_b[idx01];
+                                
+                                float r10 = src_r[idx10];
+                                float g10 = src_g[idx10];
+                                float b10 = src_b[idx10];
+                                
+                                float r11 = src_r[idx11];
+                                float g11 = src_g[idx11];
+                                float b11 = src_b[idx11];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                // Convert to RGB565
+                                uint8_t r8 = (uint8_t)r_interp;
+                                uint8_t g8 = (uint8_t)g_interp;
+                                uint8_t b8 = (uint8_t)b_interp;
+                                
+                                dst_ptr[y * width + x] = COLOR_R8_G8_B8_TO_RGB565(r8, g8, b8);
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    case IMAGE_FORMAT_RGB888:
+                    {
+                        uint8_t *dst_ptr = dst->mPixel;
+                        
+                        for (uint32_t y = 0; y < height; y++)
+                        {
+                            for (uint32_t x = 0; x < width; x++)
+                            {
+                                float src_x = (x + 0.5f) * sx - 0.5f;
+                                float src_y = (y + 0.5f) * sy - 0.5f;
+                                
+                                int x0 = (int)src_x;
+                                int y0 = (int)src_y;
+                                int x1 = x0 + 1;
+                                int y1 = y0 + 1;
+                                
+                                // Clamp to source boundaries
+                                if (x1 >= src->mWidth) x1 = x0;
+                                if (y1 >= src->mHeight) y1 = y0;
+                                
+                                // Bilinear interpolation
+                                float x_ratio = src_x - x0;
+                                float y_ratio = src_y - y0;
+                                float x_opposite = 1.0f - x_ratio;
+                                float y_opposite = 1.0f - y_ratio;
+                                
+                                // Get RGB values for 4 neighboring pixels from planar format
+                                uint32_t idx00 = y0 * src->mWidth + x0;
+                                uint32_t idx01 = y0 * src->mWidth + x1;
+                                uint32_t idx10 = y1 * src->mWidth + x0;
+                                uint32_t idx11 = y1 * src->mWidth + x1;
+                                
+                                // Interpolate each channel separately
+                                float r00 = src_r[idx00];
+                                float g00 = src_g[idx00];
+                                float b00 = src_b[idx00];
+                                
+                                float r01 = src_r[idx01];
+                                float g01 = src_g[idx01];
+                                float b01 = src_b[idx01];
+                                
+                                float r10 = src_r[idx10];
+                                float g10 = src_g[idx10];
+                                float b10 = src_b[idx10];
+                                
+                                float r11 = src_r[idx11];
+                                float g11 = src_g[idx11];
+                                float b11 = src_b[idx11];
+                                
+                                float r_interp = r00 * x_opposite * y_opposite +
+                                            r01 * x_ratio * y_opposite +
+                                            r10 * x_opposite * y_ratio +
+                                            r11 * x_ratio * y_ratio;
+                                
+                                float g_interp = g00 * x_opposite * y_opposite +
+                                            g01 * x_ratio * y_opposite +
+                                            g10 * x_opposite * y_ratio +
+                                            g11 * x_ratio * y_ratio;
+                                
+                                float b_interp = b00 * x_opposite * y_opposite +
+                                            b01 * x_ratio * y_opposite +
+                                            b10 * x_opposite * y_ratio +
+                                            b11 * x_ratio * y_ratio;
+                                
+                                uint32_t dst_idx = (y * width + x) * 3;
+                                dst_ptr[dst_idx] = (uint8_t)r_interp;
+                                dst_ptr[dst_idx + 1] = (uint8_t)g_interp;
+                                dst_ptr[dst_idx + 2] = (uint8_t)b_interp;
+                            }
+                        }
+                        return 0;
+                    }
+                    
+                    default:
+                        LOG_E("Unsupported conversion from RGBP888 to format %d", new_format);
+                        return -1;
+                }
+            }
+            break;
+            default:
+                LOG_E("Unsupported source format %d for resize_to_new_format", src->mFormat);
+                return -1;
+        }
+        
+        return 0;
+    }
+
+    int Image::resize_to_new_format(Image *dst, uint32_t width, uint32_t height, image_format_t new_format, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, new_format, create);
+    }
+
+    Image * Image::resize_to_new_format(uint32_t width, uint32_t height, image_format_t new_format)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, new_format, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_grayscale(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    int Image::resize_to_grayscale(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_GRAYSCALE, create);
+    }
+
+    Image * Image::resize_to_grayscale(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_GRAYSCALE, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgb565(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGB565, create);
+    }
+
+    int Image::resize_to_rgb565(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGB565, create);
+    }
+
+    Image * Image::resize_to_rgb565(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGB565, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgb888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGB888, create);
+    }
+
+    int Image::resize_to_rgb888(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGB888, create);
+    }
+
+    Image * Image::resize_to_rgb888(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGB888, true))
+        {
+            delete img;
+            return NULL;
+        }
+        return img;
+    }
+
+    int Image::resize_to_rgbp888(Image *src, Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(src, dst, width, height, IMAGE_FORMAT_RGBP888, create);
+    }
+
+    int Image::resize_to_rgbp888(Image *dst, uint32_t width, uint32_t height, bool create)
+    {
+        return resize_to_new_format(this, dst, width, height, IMAGE_FORMAT_RGBP888, create);
+    }
+
+    Image * Image::resize_to_rgbp888(uint32_t width, uint32_t height)
+    {
+        Image *img = new Image();
+        if (0x00 != resize_to_new_format(this, img, width, height, IMAGE_FORMAT_RGBP888, true))
         {
             delete img;
             return NULL;
@@ -1034,12 +2433,12 @@ namespace K210
             return -1;
         }
 
-        dst->w = x;
-        dst->h = y;
-        dst->pixel = img;
-        dst->format = IMAGE_FORMAT_RGB888;
-        dst->bpp = format_to_bpp(IMAGE_FORMAT_RGB888);
-        dst->buffer_not_align = true;
+        dst->mWidth = x;
+        dst->mHeight = y;
+        dst->mPixel = img;
+        dst->mFormat = IMAGE_FORMAT_RGB888;
+        dst->mBpp = format_to_bpp(IMAGE_FORMAT_RGB888);
+        dst->mBufferNotAlign = true;
 
         return 0;
     }
@@ -1095,16 +2494,16 @@ namespace K210
 
     int Image::save_bmp(Image *img, fs::FS &fs, const char *name)
     {
-        if (IMAGE_FORMAT_RGB888 != img->format)
+        if (IMAGE_FORMAT_RGB888 != img->mFormat)
         {
             LOG_E("write bmp only support rgb888");
             return -1;
         }
 
-        if ((NULL == img->pixel) ||
-            (0x00 == img->w) ||
-            (0x00 == img->h) ||
-            (0x00 == img->bpp))
+        if ((NULL == img->mPixel) ||
+            (0x00 == img->mWidth) ||
+            (0x00 == img->mHeight) ||
+            (0x00 == img->mBpp))
         {
             LOG_E("Invalid image.");
             return -1;
@@ -1113,7 +2512,7 @@ namespace K210
         struct save_bmp_temp_file _buff;
 
         _buff.offset = 0;
-        _buff.size = img->w * img->h * img->bpp + 512;
+        _buff.size = img->mWidth * img->mHeight * img->mBpp + 512;
         _buff.buffer = (uint8_t *)rt_malloc_align(_buff.size, 8);
         if(NULL == _buff.buffer)
         {
@@ -1121,9 +2520,9 @@ namespace K210
             return -1;
         }
 
-        LOG_I("save bmp width %d, height %d, bpp %d, pixel %p", img->w, img->h, img->bpp, img->pixel);
+        LOG_D("save bmp width %d, height %d, bpp %d, pixel %p", img->mWidth, img->mHeight, img->mBpp, img->mPixel);
 
-        if(0x00 == stbi_write_bmp_to_func(stbi_write_func, (void *)&_buff, img->w, img->h, img->bpp, (void *)img->pixel))
+        if(0x00 == stbi_write_bmp_to_func(stbi_write_func, (void *)&_buff, img->mWidth, img->mHeight, img->mBpp, (void *)img->mPixel))
         {
             rt_free_align(_buff.buffer);
 
@@ -1131,7 +2530,7 @@ namespace K210
             return -1;
         }
 
-        LOG_I("Bmp size is %ld", _buff.offset);
+        LOG_D("Bmp size is %ld", _buff.offset);
 
         fs::File file = fs.open(name, FILE_WRITE);
         if (!file)
@@ -1154,7 +2553,7 @@ namespace K210
         file.close();
         rt_free_align(_buff.buffer);
 
-        LOG_I("write bmp success");
+        LOG_D("write bmp success");
 
         return 0;
     }
@@ -1164,6 +2563,158 @@ namespace K210
         return save_bmp(this, fs, name);
     }
 
+    int Image::save_jpeg(Image *img, fs::FS &fs, const char *name, int quality)
+    {
+        if ((NULL == img->mPixel) ||
+            (0x00 == img->mWidth) ||
+            (0x00 == img->mHeight) ||
+            (0x00 == img->mBpp))
+        {
+            LOG_E("Invalid image.");
+            return -1;
+        }
+
+        // Validate quality parameter
+        if (quality < 1 || quality > 100)
+        {
+            LOG_W("JPEG quality should be between 1-100, using default 80");
+            quality = 80;
+        }
+
+        // Create ImageInfo_t structure for JPEG compression
+        ImageInfo_t src_img;
+        src_img.w = img->mWidth;
+        src_img.h = img->mHeight;
+        src_img.data = img->mPixel;
+        src_img.size = img->mWidth * img->mHeight * img->mBpp;
+        src_img.pixfmt = img->mFormat;
+
+        // Allocate buffer for JPEG compression
+        // Estimate JPEG size (typically 10-20% of original for quality 80)
+        size_t estimated_size = (src_img.size * 20) / 100;
+        if (estimated_size < 1024) estimated_size = 1024; // Minimum 1KB
+
+        uint8_t *jpeg_buffer = (uint8_t *)rt_malloc(estimated_size);
+        if (NULL == jpeg_buffer)
+        {
+            LOG_E("Failed to allocate memory for JPEG buffer");
+            return -1;
+        }
+
+        size_t jpeg_size = estimated_size;
+        int result = jpeg_compress(&src_img, jpeg_buffer, &jpeg_size, quality, JPEG_SUBSAMPLING_AUTO);
+
+        if (result != 0)
+        {
+            LOG_E("JPEG compression failed with error code: %d", result);
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        // Write JPEG data to file
+        fs::File file = fs.open(name, FILE_WRITE);
+        if (!file)
+        {
+            LOG_E("Failed to open file %s for writing", name);
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        if (jpeg_size != file.write(jpeg_buffer, jpeg_size))
+        {
+            LOG_E("Failed to write JPEG data to file");
+            file.close();
+            rt_free(jpeg_buffer);
+            return -1;
+        }
+
+        file.close();
+        rt_free(jpeg_buffer);
+
+        LOG_D("JPEG saved successfully to %s, size: %d bytes", name, jpeg_size);
+
+        return 0;
+    }
+
+    int Image::save_jpeg(fs::FS &fs, const char *name, int quality)
+    {
+        return save_jpeg(this, fs, name, quality);
+    }
+
+    int Image::compress_jpeg(Image *img, uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality)
+    {
+        if ((NULL == img->mPixel) ||
+            (0x00 == img->mWidth) ||
+            (0x00 == img->mHeight) ||
+            (0x00 == img->mBpp) ||
+            (NULL == jpeg_buffer) ||
+            (NULL == jpeg_size))
+        {
+            LOG_E("Invalid parameters for JPEG compression");
+            return -1;
+        }
+
+        // Validate quality parameter
+        if (quality < 1 || quality > 100)
+        {
+            LOG_W("JPEG quality should be between 1-100, using default 80");
+            quality = 80;
+        }
+
+        // Create ImageInfo_t structure for JPEG compression
+        ImageInfo_t src_img;
+        src_img.w = img->mWidth;
+        src_img.h = img->mHeight;
+        src_img.data = img->mPixel;
+        src_img.size = img->mWidth * img->mHeight * img->mBpp;
+        src_img.pixfmt = img->mFormat;
+
+        // Check if provided buffer has reasonable minimum size
+        if (buffer_capacity < 1024)
+        {
+            LOG_E("Provided buffer capacity (%d bytes) is too small, minimum 1024 bytes required", buffer_capacity);
+            return -1;
+        }
+ 
+        // Compress directly into user-provided buffer
+        size_t temp_jpeg_size = buffer_capacity;
+        int result = jpeg_compress(&src_img, jpeg_buffer, &temp_jpeg_size, quality, JPEG_SUBSAMPLING_AUTO);
+
+        if (result != 0)
+        {
+            LOG_E("JPEG compression failed with error code: %d", result);
+            return -1;
+        }
+
+        // Return actual compressed size
+        *jpeg_size = temp_jpeg_size;
+
+        LOG_D("JPEG compressed successfully, size: %d bytes", *jpeg_size);
+        return 0;
+    }
+
+    int Image::compress_jpeg(uint8_t *jpeg_buffer, size_t buffer_capacity, size_t *jpeg_size, int quality)
+    {
+        return compress_jpeg(this, jpeg_buffer, buffer_capacity, jpeg_size, quality);
+    }
+
+    int Image::as_imlib_image(image_t *img)
+    {
+        if(!img) {
+            return -2;
+        }
+
+        if((IMAGE_FORMAT_GRAYSCALE != mFormat) && (IMAGE_FORMAT_RGB565 != mFormat)) {
+            return -1;
+        }
+
+        img->w = mWidth;
+        img->h = mHeight;
+        img->pixfmt = (mFormat == IMAGE_FORMAT_GRAYSCALE) ? PIXFORMAT_GRAYSCALE : PIXFORMAT_RGB565;
+        img->data = mPixel;
+
+        return 0;
+    }
 }
 
 

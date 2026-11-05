@@ -81,7 +81,7 @@ void setup()
         while(1) {}
     }
 
-    img_ai = new Image(CUSTOM_IMG_W, CUSTOM_IMG_H, IMAGE_FORMAT_R8G8B8, buff.ai.r);
+    img_ai = new Image(CUSTOM_IMG_W, CUSTOM_IMG_H, IMAGE_FORMAT_RGBP888, buff.ai.r);
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply);
 
     if(0x00 != yolo2.load_kmodel(FFat, "/KPU/face_mask_detect/detect_5.kmodel"))

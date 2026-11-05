@@ -672,7 +672,7 @@ static int vfs_fat_unlink(void* ctx, const char *path)
     FRESULT res = f_unlink(path);
     _lock_release(&fat_ctx->lock);
     if (res != FR_OK) {
-        LOG_D("%s: fresult=%d", __func__, res);
+        LOG_E("%s: fresult=%d", __func__, res);
         errno = fresult_to_errno(res);
         return -1;
     }

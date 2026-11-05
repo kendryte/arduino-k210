@@ -1,287 +1,144 @@
-/*
- FS.cpp - file system wrapper
- Copyright (c) 2015 Ivan Grokhotkov. All rights reserved.
- This file is part of the esp8266 core for Arduino environment.
-
- This library is free software; you can redistribute it and/or
- modify it under the terms of the GNU Lesser General Public
- License as published by the Free Software Foundation; either
- version 2.1 of the License, or (at your option) any later version.
-
- This library is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- Lesser General Public License for more details.
-
- You should have received a copy of the GNU Lesser General Public
- License along with this library; if not, write to the Free Software
- Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+// SPDX-License-Identifier: BSD-2-Clause
+// Copyright (c) 2026, arduino-k210 contributors
+// License: LICENSE
 
 #include "FS.h"
 #include "FSImpl.h"
-
-using namespace fs;
-
-size_t File::write(uint8_t c)
+#include <limits.h>
+#include <utility>
+namespace fs {
+File::File(FileImplPtr implementation)
+    : _p(std::move(implementation))
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->write(&c, 1);
+    setTimeout(0);
 }
-
-time_t File::getLastWrite()
+File::operator bool() const
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->getLastWrite();
+    return _p && static_cast<bool>(*_p);
 }
-
-size_t File::write(const uint8_t *buf, size_t size)
+size_t File::write(uint8_t value)
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->write(buf, size);
+    return write(&value, 1);
 }
-
-int File::available()
+size_t File::write(const uint8_t* data, size_t count)
 {
-    if (!*this) {
-        return false;
-    }
-
-    return _p->size() - _p->position();
+    return *this && data ? _p->write(data, count) : 0;
 }
-
+size_t File::read(uint8_t* output, size_t count)
+{
+    return *this && output ? _p->read(output, count) : 0;
+}
 int File::read()
 {
-    if (!*this) {
-        return -1;
-    }
-
-    uint8_t result;
-    if (_p->read(&result, 1) != 1) {
-        return -1;
-    }
-
-    return result;
+    uint8_t value;
+    return read(&value, 1) == 1 ? value : -1;
 }
-
-size_t File::read(uint8_t* buf, size_t size)
+size_t File::readBytes(char* output, size_t count)
 {
-    if (!*this) {
-        return -1;
-    }
-
-    return _p->read(buf, size);
+    return read(reinterpret_cast<uint8_t*>(output), count);
 }
-
+int File::available()
+{
+    if (!*this || isDirectory())
+        return 0;
+    const size_t length = size(), offset = position();
+    if (offset >= length)
+        return 0;
+    return length - offset > INT_MAX ? INT_MAX : static_cast<int>(length - offset);
+}
 int File::peek()
 {
-    if (!*this) {
+    if (!*this)
         return -1;
-    }
-
-    size_t curPos = _p->position();
-    int result = read();
-    seek(curPos, SeekSet);
-    return result;
+    const size_t offset = position();
+    if (offset > UINT32_MAX)
+        return -1;
+    const int value = read();
+    return seek(static_cast<uint32_t>(offset)) ? value : -1;
 }
-
 void File::flush()
 {
-    if (!*this) {
-        return;
-    }
-
-    _p->flush();
+    if (*this)
+        _p->flush();
 }
-
-bool File::seek(uint32_t pos, SeekMode mode)
+bool File::seek(uint32_t offset, SeekMode mode)
 {
-    if (!*this) {
-        return false;
-    }
-
-    return _p->seek(pos, mode);
+    return *this && mode >= SeekSet && mode <= SeekEnd && _p->seek(offset, mode);
 }
-
 size_t File::position() const
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->position();
+    return *this ? _p->position() : 0;
 }
-
 size_t File::size() const
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->size();
+    return *this ? _p->size() : 0;
 }
-
-bool File::setBufferSize(size_t size)
+bool File::setBufferSize(size_t count)
 {
-    if (!*this) {
-        return 0;
-    }
-
-    return _p->setBufferSize(size);
+    return *this && _p->setBufferSize(count);
 }
-
 void File::close()
 {
     if (_p) {
         _p->close();
-        _p = nullptr;
+        _p.reset();
     }
 }
-
-File::operator bool() const
+time_t File::getLastWrite()
 {
-    return _p != nullptr && *_p != false;
+    return *this ? _p->getLastWrite() : 0;
 }
-
 const char* File::path() const
 {
-    if (!*this) {
-        return nullptr;
-    }
-
-    return _p->path();
+    return *this ? _p->path() : nullptr;
 }
-
 const char* File::name() const
 {
-    if (!*this) {
-        return nullptr;
-    }
-
-    return _p->name();
+    return *this ? _p->name() : nullptr;
 }
-
-//to implement
-boolean File::isDirectory(void)
+bool File::isDirectory()
 {
-    if (!*this) {
-        return false;
-    }
-    return _p->isDirectory();
+    return *this && _p->isDirectory();
 }
-
 File File::openNextFile(const char* mode)
 {
-    if (!*this) {
-        return File();
-    }
-    return _p->openNextFile(mode);
+    return File(*this && mode ? _p->openNextFile(mode) : FileImplPtr());
 }
-
-void File::rewindDirectory(void)
+void File::rewindDirectory()
 {
-    if (!*this) {
-        return;
-    }
-    _p->rewindDirectory();
+    if (*this)
+        _p->rewindDirectory();
 }
-
-File FS::open(const String& path, const char* mode, const bool create)
+File FS::open(const char* path, const char* mode, bool create)
 {
-    return open(path.c_str(), mode, create);
+    return File(_impl && path && mode ? _impl->open(path, mode, create) : FileImplPtr());
 }
-
-File FS::open(const char* path, const char* mode, const bool create)
-{
-    if (!_impl) {
-        return File();
-    }
-
-    return File(_impl->open(path, mode, create));
-}
-
 bool FS::exists(const char* path)
 {
-    if (!_impl) {
-        return false;
-    }
-    return _impl->exists(path);
+    return _impl && path && _impl->exists(path);
 }
-
-bool FS::exists(const String& path)
-{
-    return exists(path.c_str());
-}
-
 bool FS::remove(const char* path)
 {
-    if (!_impl) {
-        return false;
-    }
-    return _impl->remove(path);
+    return _impl && path && _impl->remove(path);
 }
-
-bool FS::remove(const String& path)
+bool FS::rename(const char* from, const char* to)
 {
-    return remove(path.c_str());
+    return _impl && from && to && _impl->rename(from, to);
 }
-
-bool FS::rename(const char* pathFrom, const char* pathTo)
+bool FS::mkdir(const char* path)
 {
-    if (!_impl) {
-        return false;
-    }
-    return _impl->rename(pathFrom, pathTo);
+    return _impl && path && _impl->mkdir(path);
 }
-
-bool FS::rename(const String& pathFrom, const String& pathTo)
+bool FS::rmdir(const char* path)
 {
-    return rename(pathFrom.c_str(), pathTo.c_str());
+    return _impl && path && _impl->rmdir(path);
 }
-
-
-bool FS::mkdir(const char *path)
+void FSImpl::mountpoint(const char* path)
 {
-    if (!_impl) {
-        return false;
-    }
-    return _impl->mkdir(path);
+    _mountpoint = path;
 }
-
-bool FS::mkdir(const String &path)
-{
-    return mkdir(path.c_str());
-}
-
-bool FS::rmdir(const char *path)
-{
-    if (!_impl) {
-        return false;
-    }
-    return _impl->rmdir(path);
-}
-
-bool FS::rmdir(const String &path)
-{
-    return rmdir(path.c_str());
-}
-
-
-void FSImpl::mountpoint(const char * mp)
-{
-    _mountpoint = mp;
-}
-
-const char * FSImpl::mountpoint()
+const char* FSImpl::mountpoint()
 {
     return _mountpoint;
+}
 }

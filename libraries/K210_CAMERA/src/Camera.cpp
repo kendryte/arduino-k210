@@ -109,9 +109,9 @@ int Camera::write_reg(int reg_addr, int reg_data)
     return write_reg(static_cast<uint16_t>(reg_addr), static_cast<uint16_t>(reg_data));
 }
 
-int Camera::snapshot(uint32_t timeout_ms)
+int Camera::snapshot(uint32_t timeout_ms, bool convert_display_order)
 {
-    return BusDVP::capture(timeout_ms);
+    return BusDVP::capture(timeout_ms, convert_display_order);
 }
 
 int Camera::width(void)

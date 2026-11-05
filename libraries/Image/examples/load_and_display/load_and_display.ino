@@ -35,7 +35,7 @@ void setup()
 
     if(img)
     {
-        Serial.printf("width %d, height %d, bpp %d, pixel %p\n", img->w, img->h, img->bpp, img->pixel);
+        Serial.printf("width %d, height %d, bpp %d, pixel %p\n", img->width(), img->height(), img->bpp(), img->pixel());
 
         // 转换图片格式为rgb565
         Image *rgb565 = img->to_rgb565();

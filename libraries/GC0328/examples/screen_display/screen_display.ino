@@ -37,7 +37,7 @@ void setup()
         while(1) {}
     }
 
-    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_R8G8B8, buff.ai.r);
+    img_ai = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGBP888, buff.ai.r);
     img_display = new Image(cam.width(), cam.height(), IMAGE_FORMAT_RGB565, buff.disply);
 
     lcd.begin();

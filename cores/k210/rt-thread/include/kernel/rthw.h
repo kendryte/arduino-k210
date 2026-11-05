@@ -54,6 +54,11 @@ enum RT_HW_CACHE_OPS
  * CPU interfaces
  */
 #ifdef RT_USING_CACHE
+
+#ifdef RT_USING_SMART
+#include <cache.h>
+#endif
+
 void rt_hw_cpu_icache_enable(void);
 void rt_hw_cpu_icache_disable(void);
 rt_base_t rt_hw_cpu_icache_status(void);
@@ -80,6 +85,8 @@ void rt_hw_cpu_dcache_ops(int ops, void* addr, int size);
 
 void rt_hw_cpu_reset(void);
 void rt_hw_cpu_shutdown(void);
+
+const char *rt_hw_cpu_arch(void);
 
 rt_uint8_t *rt_hw_stack_init(void       *entry,
                              void       *parameter,

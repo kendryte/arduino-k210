@@ -1,3 +1,3 @@
 def test_kpu(dut):
-    '''Kpu run yolo face detect test'''
+    """Load and run KPU models from SPIFFS."""
     dut.expect_unity_test_output(timeout=240)

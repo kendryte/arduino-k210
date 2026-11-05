@@ -22,11 +22,8 @@ from _pytest.fixtures import (
     FixtureDef,
     FixtureRequest,
     SubRequest,
-    call_fixture_func,
-    resolve_fixture_function,
 )
 from _pytest.main import Session
-from _pytest.outcomes import TEST_OUTCOME
 from _pytest.python import Function
 
 from .app import App
@@ -127,10 +124,14 @@ def pytest_addoption(parser):
     )
 
     serial_group = parser.getgroup('embedded-serial')
-    serial_group.addoption('--port', help='serial port. (Env: "ESPPORT" if service "esp" specified, Default: "None")')
+    serial_group.addoption('--port', help='Explicit serial port path. (Env: K210_PORT)')
     serial_group.addoption(
-        '--port-location', help='USB device location string ("<bus>-<port>[-<port>]…"). Default: None'
+        '--port-location', help='Exact USB device location. (Env: K210_PORT_LOCATION)'
     )
+    serial_group.addoption('--port-serial-number', help='Exact USB serial number. (Env: K210_PORT_SERIAL_NUMBER)')
+    serial_group.addoption('--port-interface', help='Exact USB interface description. (Env: K210_PORT_INTERFACE)')
+    serial_group.addoption('--port-vid', help='USB vendor ID, decimal or 0x-prefixed hex. (Env: K210_PORT_VID)')
+    serial_group.addoption('--port-pid', help='USB product ID, decimal or 0x-prefixed hex. (Env: K210_PORT_PID)')
     serial_group.addoption(
         '--baud',
         help='serial port communication baud rate. (Default: 115200)',
@@ -150,7 +151,8 @@ def pytest_addoption(parser):
     )
     esp_group.addoption(
         '--esptool-baud',
-        help='esptool flashing baud rate. (Env: "ESPBAUD" if service "esp" specified, Default: 921600)',
+        '--flash-baud',
+        help='Flashing baud rate. K210 defaults to 115200; ESP defaults to 921600. (Env: ESPBAUD)',
     )
     esp_group.addoption(
         '--port-mac',
@@ -512,7 +514,7 @@ def session_tempdir(session_root_logdir) -> str:
     _tmpdir = os.path.join(
         session_root_logdir,
         'pytest-embedded',
-        f'{datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S-%f")}',
+        f'{datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H-%M-%S-%f")}',
     )
     os.makedirs(_tmpdir, exist_ok=True)
     return _tmpdir
@@ -723,7 +725,7 @@ def build_dir(request: FixtureRequest) -> t.Optional[str]:
 @multi_dut_argument
 def port(request: FixtureRequest) -> t.Optional[str]:
     """Enable parametrization for the same cli option"""
-    return _request_param_or_config_option_or_default(request, 'port', None)
+    return _request_param_or_config_option_or_default(request, 'port', os.getenv('K210_PORT'))
 
 
 @pytest.fixture
@@ -737,7 +739,31 @@ def baud(request: FixtureRequest) -> t.Optional[str]:
 @multi_dut_argument
 def port_location(request: FixtureRequest) -> t.Optional[str]:
     """Enable parametrization for the same cli option"""
-    return _request_param_or_config_option_or_default(request, 'port_location', None)
+    return _request_param_or_config_option_or_default(request, 'port_location', os.getenv('K210_PORT_LOCATION'))
+
+
+@pytest.fixture
+@multi_dut_argument
+def port_serial_number(request: FixtureRequest) -> t.Optional[str]:
+    return _request_param_or_config_option_or_default(request, 'port_serial_number', os.getenv('K210_PORT_SERIAL_NUMBER'))
+
+
+@pytest.fixture
+@multi_dut_argument
+def port_interface(request: FixtureRequest) -> t.Optional[str]:
+    return _request_param_or_config_option_or_default(request, 'port_interface', os.getenv('K210_PORT_INTERFACE'))
+
+
+@pytest.fixture
+@multi_dut_argument
+def port_vid(request: FixtureRequest) -> t.Optional[str]:
+    return _request_param_or_config_option_or_default(request, 'port_vid', os.getenv('K210_PORT_VID'))
+
+
+@pytest.fixture
+@multi_dut_argument
+def port_pid(request: FixtureRequest) -> t.Optional[str]:
+    return _request_param_or_config_option_or_default(request, 'port_pid', os.getenv('K210_PORT_PID'))
 
 
 #######
@@ -936,6 +962,10 @@ def _fixture_classes_and_options(
     build_dir,
     port,
     port_location,
+    port_serial_number,
+    port_interface,
+    port_vid,
+    port_pid,
     port_mac,
     target,
     beta_target,
@@ -1029,11 +1059,15 @@ def _fixture_classes_and_options(
                     'msg_queue': msg_queue,
                     'target': target,
                     'beta_target': beta_target,
-                    'port': os.getenv('ESPPORT') or port,
+                    'port': port,
                     'port_location': port_location,
+                    'port_serial_number': port_serial_number,
+                    'port_interface': port_interface,
+                    'port_vid': port_vid,
+                    'port_pid': port_pid,
                     'port_mac': port_mac,
                     'baud': int(baud or EspSerial.DEFAULT_BAUDRATE),
-                    'esptool_baud': int(os.getenv('ESPBAUD') or esptool_baud or EspSerial.ESPTOOL_DEFAULT_BAUDRATE),
+                    'esptool_baud': int(esptool_baud or os.getenv('ESPBAUD') or EspSerial.ESPTOOL_DEFAULT_BAUDRATE),
                     'skip_autoflash': skip_autoflash,
                     'erase_all': erase_all,
                     'meta': _meta,
@@ -1070,6 +1104,10 @@ def _fixture_classes_and_options(
                     'msg_queue': msg_queue,
                     'port': port,
                     'port_location': port_location,
+                    'port_serial_number': port_serial_number,
+                    'port_interface': port_interface,
+                    'port_vid': port_vid,
+                    'port_pid': port_pid,
                     'baud': int(baud or Serial.DEFAULT_BAUDRATE),
                     'meta': _meta,
                 }
@@ -1147,7 +1185,7 @@ def _fixture_classes_and_options(
                         'gdb': None,
                     }
                 )
-            elif 'serial' in _services or 'esp' in _services:
+            elif 'serial' in _services or 'esp' in _services or 'k210' in _services:
                 if 'esp' in _services and 'idf' in _services:
                     from pytest_embedded_idf import IdfDut
 
@@ -1356,40 +1394,12 @@ class PytestEmbedded:
                 logging.error(f'  - {case.name}')
             raise AssertionError('Unity test failed')
 
-    @staticmethod
-    def _pytest_fixturedef_get_kwargs(fixturedef: FixtureDef[t.Any], request: SubRequest) -> t.Dict[str, t.Any]:
-        kwargs = {}
-        for argname in fixturedef.argnames:
-            fixdef = request._get_active_fixturedef(argname)
-            assert fixdef.cached_result is not None
-            result, arg_cache_key, exc = fixdef.cached_result
-            request._check_scope(argname, request._scope, fixdef._scope)
-            kwargs[argname] = result
-
-        return kwargs
-
-    @staticmethod
-    def _pytest_fixturedef_exec(fixturedef: FixtureDef[t.Any], request: SubRequest, kwargs: t.Dict[str, t.Any]):
-        fixturefunc = resolve_fixture_function(fixturedef, request)
-        my_cache_key = fixturedef.cache_key(request)
-        try:
-            result = call_fixture_func(fixturefunc, request, kwargs)
-        except TEST_OUTCOME:
-            exc_info = sys.exc_info()
-            assert exc_info[0] is not None
-            fixturedef.cached_result = (None, my_cache_key, exc_info)
-            raise
-        fixturedef.cached_result = (result, my_cache_key, None)
-        return result
-
-    @pytest.hookimpl(tryfirst=True)
+    @pytest.hookimpl(hookwrapper=True)
     def pytest_fixture_setup(self, fixturedef: FixtureDef[t.Any], request: SubRequest):
-        # record session_tempdir in session stash
+        # Let pytest manage fixture setup and caching; private APIs change between releases.
+        outcome = yield
         if fixturedef.argname == 'session_tempdir':
-            kwargs = self._pytest_fixturedef_get_kwargs(fixturedef, request)
-            val = self._pytest_fixturedef_exec(fixturedef, request, kwargs)
-            request.config.stash[_session_tempdir_key] = val
-            return val
+            request.config.stash[_session_tempdir_key] = outcome.get_result()
 
     @staticmethod
     def _duplicate_items(items: t.List[_T]) -> t.List[_T]:

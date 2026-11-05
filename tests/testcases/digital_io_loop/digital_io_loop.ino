@@ -35,6 +35,7 @@ void testOutput(void)
 }
 
 static volatile int flag = -1;
+static volatile int edgeCount = 0;
 
 void pin_irq(void)
 {
@@ -54,6 +55,36 @@ void testInterrupt(void)
     detachInterrupt(PIN_INPUT);
 }
 
+void pin_irq_param(void *context)
+{
+    volatile int *count = static_cast<volatile int *>(context);
+    ++*count;
+}
+
+void testRisingInterrupt(void)
+{
+    flag = -1;
+    digitalWrite(PIN_OUTPUT, LOW);
+    rt_thread_delay(1);
+    attachInterrupt(PIN_INPUT, pin_irq, RISING);
+    digitalWrite(PIN_OUTPUT, HIGH);
+    rt_thread_delay(1);
+    TEST_ASSERT_EQUAL(1, flag);
+    detachInterrupt(PIN_INPUT);
+}
+
+void testChangeInterruptWithParameter(void)
+{
+    edgeCount = 0;
+    attachInterruptParam(PIN_INPUT, pin_irq_param, CHANGE, const_cast<int *>(&edgeCount));
+    digitalWrite(PIN_OUTPUT, LOW);
+    rt_thread_delay(1);
+    digitalWrite(PIN_OUTPUT, HIGH);
+    rt_thread_delay(1);
+    TEST_ASSERT_EQUAL(2, edgeCount);
+    detachInterrupt(PIN_INPUT);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -65,6 +96,8 @@ void setup()
     UNITY_BEGIN();
     RUN_TEST(testOutput);
     RUN_TEST(testInterrupt);
+    RUN_TEST(testRisingInterrupt);
+    RUN_TEST(testChangeInterruptWithParameter);
     UNITY_END();
 }
 

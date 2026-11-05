@@ -725,6 +725,13 @@ class KFlash:
                     KFlash.log(WARN_MSG,"Unknown mode", BASH_TIPS['DEFAULT'])
 
             def __init__(self, port='/dev/ttyUSB1', baudrate=115200):
+                # Apple's CDC driver can overrun the CH342's transmit buffer.
+                # Select the workaround by USB identity, never by port ordering.
+                self._paced_writes = sys.platform == 'darwin' and any(
+                    item.device.replace('/dev/tty.', '/dev/cu.', 1) == port.replace('/dev/tty.', '/dev/cu.', 1)
+                    and (item.vid, item.pid) == (0x1A86, 0x55D2)
+                    for item in serial.tools.list_ports.comports()
+                )
                 # configure the serial connections (the parameters differs on the device you are connecting to)
                 self._port = serial.Serial(
                     port=port,
@@ -735,6 +742,8 @@ class KFlash:
                     timeout=0.1
                 )
                 KFlash.log(INFO_MSG, "Default baudrate is", baudrate, ", later it may be changed to the value you set.",  BASH_TIPS['DEFAULT'])
+                if self._paced_writes:
+                    KFlash.log(INFO_MSG, "CH342 on macOS: pacing USB writes in 64-byte blocks")
 
                 self._port.isOpen()
                 self._slip_reader = slip_reader(self._port)
@@ -752,7 +761,21 @@ class KFlash:
                       + (packet.replace(b'\xdb', b'\xdb\xdd').replace(b'\xc0', b'\xdb\xdc')) \
                       + b'\xc0'
                 #KFlash.log('[WRITE]', binascii.hexlify(buf))
-                return self._port.write(buf)
+                if not self._paced_writes:
+                    return self._port.write(buf)
+
+                sent = 0
+                while sent < len(buf):
+                    self.checkKillExit()
+                    block = buf[sent:sent + 64]
+                    written = self._port.write(block)
+                    if written is None or not 0 < written <= len(block):
+                        self.raise_exception(IOError("Serial write made no progress"))
+                    sent += written
+                    self._port.flush()
+                    # Allow these 8N1 bytes to leave the UART before queuing more.
+                    time.sleep(written * 10.0 / self._port.baudrate)
+                return sent
 
             def read_loop(self):
                 #out = b''
@@ -1015,57 +1038,67 @@ class KFlash:
                     return False
                 return True
 
+            def _flash_request(self, packet, opcode, operation, response_timeout, deadline_s=None):
+                """Retry a flash command without advancing past an unacknowledged write."""
+                deadline = time.monotonic() + deadline_s if deadline_s is not None else None
+                failures = 0
+                attempts = 0
+                reason = 'no acknowledgement'
+                while failures < MAX_RETRY_TIMES:
+                    self.checkKillExit()
+                    if deadline is not None and time.monotonic() >= deadline:
+                        break
+                    if not self._port.isOpen():
+                        self._port.open()
+                    if attempts:
+                        self._port.reset_input_buffer()
+                    attempts += 1
+                    try:
+                        self.write(packet)
+                    except (serial.SerialException, OSError) as error:
+                        self.raise_exception(RuntimeError(
+                            '{} transport failed at {} baud: {}'.format(operation, self._port.baudrate, error)))
+                    timeout = response_timeout
+                    if deadline is not None:
+                        timeout = min(timeout, deadline - time.monotonic())
+                        if timeout <= 0:
+                            reason = 'deadline exceeded while sending packet'
+                            break
+                    delay = 0.1
+                    try:
+                        reply = self.recv_one_return(timeout_s=timeout)
+                    except Exception as error:
+                        failures += 1
+                        reason = 'response timed out' if isinstance(error, TimeoutError) else str(error)
+                    else:
+                        if len(reply) >= 2 and reply[0] == opcode and reply[1] == 0xe0:
+                            self._port.reset_input_buffer()
+                            return
+                        if opcode == 0xd4 and len(reply) >= 2 and reply[:2] == b'\xd4\xe7':
+                            # The flash chip can take time to erase/program; the deadline still applies.
+                            reason = 'flash remained busy'
+                            delay = 0.5
+                        else:
+                            failures += 1
+                            reason = 'unexpected reply ' + reply.hex()
+                    if failures >= MAX_RETRY_TIMES or (deadline is not None and time.monotonic() >= deadline):
+                        break
+                    KFlash.log(WARN_MSG, 'Retrying {} at {} baud (attempt {}): {}'.format(
+                        operation, self._port.baudrate, attempts, reason))
+                    if deadline is not None:
+                        delay = min(delay, max(0, deadline - time.monotonic()))
+                    time.sleep(delay)
+                self.raise_exception(RuntimeError('{} failed after {} attempts at {} baud: {}'.format(
+                    operation, attempts, self._port.baudrate, reason)))
+
             def init_flash(self, chip_type):
                 chip_type = int(chip_type)
                 KFlash.log(INFO_MSG,"Selected Flash: ",("In-Chip", "On-Board")[chip_type],BASH_TIPS['DEFAULT'])
                 out = struct.pack('<II', chip_type, 0)
                 crc32_checksum = struct.pack('<I', binascii.crc32(out) & 0xFFFFFFFF)
                 out = struct.pack('<HH', 0xd7, 0x00) + crc32_checksum + out
-                '''Retry when it have error'''
-                retry_count = 0
-                while 1:
-                    self.checkKillExit()
-                    sent = self.write(out)
-                    retry_count = retry_count + 1
-                    try:
-                        op, reason, text = FlashModeResponse.parse(self.recv_one_return())
-                    except IndexError:
-                        if retry_count > MAX_RETRY_TIMES:
-                            err = (ERROR_MSG,"Failed to initialize flash",BASH_TIPS['DEFAULT'])
-                            err = tuple2str(err)
-                            self.raise_exception( Exception(err) )
-                        KFlash.log(WARN_MSG,"Index Error, retrying...",BASH_TIPS['DEFAULT'])
-                        time.sleep(0.1)
-                        continue
-                    except TimeoutError:
-                        if retry_count > MAX_RETRY_TIMES:
-                            err = (ERROR_MSG,"Failed to initialize flash",BASH_TIPS['DEFAULT'])
-                            err = tuple2str(err)
-                            self.raise_exception( Exception(err) )
-                        KFlash.log(WARN_MSG,"Timeout Error, retrying...",BASH_TIPS['DEFAULT'])
-                        time.sleep(0.1)
-                        continue
-                    except:
-                        if retry_count > MAX_RETRY_TIMES:
-                            err = (ERROR_MSG,"Failed to initialize flash",BASH_TIPS['DEFAULT'])
-                            err = tuple2str(err)
-                            self.raise_exception( Exception(err) )
-                        KFlash.log(WARN_MSG,"Unexcepted Error, retrying...",BASH_TIPS['DEFAULT'])
-                        time.sleep(0.1)
-                        continue
-                    # KFlash.log('MAIX return op:', FlashModeResponse.Operation(op).name, 'reason:',
-                    #      FlashModeResponse.ErrorCode(reason).name)
-                    if FlashModeResponse.Operation(op) == FlashModeResponse.Operation.ISP_FLASH_INIT and FlashModeResponse.ErrorCode(reason) == FlashModeResponse.ErrorCode.ISP_RET_OK:
-                        KFlash.log(INFO_MSG,"Initialization flash Successfully",BASH_TIPS['DEFAULT'])
-                        break
-                    else:
-                        if retry_count > MAX_RETRY_TIMES:
-                            err = (ERROR_MSG,"Failed to initialize flash",BASH_TIPS['DEFAULT'])
-                            err = tuple2str(err)
-                            self.raise_exception( Exception(err) )
-                        KFlash.log(WARN_MSG,"Unexcepted Return recevied, retrying...",BASH_TIPS['DEFAULT'])
-                        time.sleep(0.1)
-                        continue
+                self._flash_request(out, 0xd7, 'Flash initialization', ISP_RECEIVE_TIMEOUT)
+                KFlash.log(INFO_MSG,"Initialization flash Successfully",BASH_TIPS['DEFAULT'])
 
             def flash_dataframe(self, data, address=0x80000000):
                 DATAFRAME_SIZE = 1024
@@ -1076,21 +1109,32 @@ class KFlash:
                 time_start = time.time()
                 for n, chunk in enumerate(data_chunks):
                     self.checkKillExit()
-                    while 1:
+                    out = struct.pack('<II', address, len(chunk))
+                    crc32_checksum = struct.pack('<I', binascii.crc32(out + chunk) & 0xFFFFFFFF)
+                    out = struct.pack('<HH', 0xc3, 0x00) + crc32_checksum + out + chunk
+                    for attempt in range(1, MAX_RETRY_TIMES + 1):
                         self.checkKillExit()
-                        #KFlash.log('[INFO] sending chunk', i, '@address', hex(address), 'chunklen', len(chunk))
-                        out = struct.pack('<II', address, len(chunk))
+                        if not self._port.isOpen():
+                            self._port.open()
+                        if attempt > 1:
+                            self._port.reset_input_buffer()
+                        self.write(out)
+                        try:
+                            reply = self.recv_one_return()
+                            if len(reply) >= 2 and reply[0] == 0xc3 and reply[1] == 0xe0:
+                                break
+                            reason = 'unexpected reply ' + reply.hex()
+                        except TimeoutError:
+                            reason = 'response timed out'
+                        if attempt == MAX_RETRY_TIMES:
+                            self.raise_exception(RuntimeError(
+                                'ISP RAM upload failed at 0x{:08x} after {} attempts: {}'.format(
+                                    address, attempt, reason)))
+                        KFlash.log(WARN_MSG, 'Retrying ISP RAM write at 0x{:08x}: {}'.format(address, reason))
+                        time.sleep(0.1)
 
-                        crc32_checksum = struct.pack('<I', binascii.crc32(out + chunk) & 0xFFFFFFFF)
-
-                        out = struct.pack('<HH', 0xc3, 0x00) + crc32_checksum + out + chunk  # op: ISP_MEMORY_WRITE: 0xc3
-                        sent = self.write(out)
-                        #KFlash.log('[INFO]', 'sent', sent, 'bytes', 'checksum', binascii.hexlify(crc32_checksum).decode())
-
-                        address += len(chunk)
-
-                        if self.recv_debug():
-                            break
+                    # A rejected packet must be resent to the same address.
+                    address += len(chunk)
 
                     columns, lines = TerminalSize.get_terminal_size((100, 24), terminal)
                     time_delta = time.time() - time_start
@@ -1102,77 +1146,14 @@ class KFlash:
                     printProgressBar(write_len, total_len, prefix = 'Downloading ISP:', suffix = speed, length = columns - 35)
 
             def dump_to_flash(self, data, address=0, size=None):
-                '''
-                typedef struct __attribute__((packed)) {
-                    uint8_t op;
-                    int32_t checksum; /* All the fields below are involved in the calculation of checksum */
-                    uint32_t address;
-                    uint32_t data_len;
-                    uint8_t data_buf[1024];
-                } isp_request_t;
-                '''
-                if size == None:
-                    DATAFRAME_SIZE = ISP_FLASH_DATA_FRAME_SIZE
-                    size = DATAFRAME_SIZE
-                data_chunks = chunks(data, size)
-                #KFlash.log('[DEBUG] flash dataframe | data length:', len(data))
-
-
-
-                for n, chunk in enumerate(data_chunks):
-                    #KFlash.log('[INFO] sending chunk', i, '@address', hex(address))
+                if size is None:
+                    size = ISP_FLASH_DATA_FRAME_SIZE
+                for chunk in chunks(data, size):
                     out = struct.pack('<II', address, len(chunk))
-
                     crc32_checksum = struct.pack('<I', binascii.crc32(out + chunk) & 0xFFFFFFFF)
-
                     out = struct.pack('<HH', 0xd4, 0x00) + crc32_checksum + out + chunk
-                    #KFlash.log("[$$$$]", binascii.hexlify(out[:32]).decode())
-                    retry_count = 0
-                    while 1:
-                        sent = self.write(out)
-                        retry_count = retry_count + 1
-                        try:
-                            op, reason, text = FlashModeResponse.parse(self.recv_one_return(timeout_s=90))
-                            #KFlash.log('[INFO]', 'sent', sent, 'bytes', 'checksum', crc32_checksum)
-                            #self.flash_recv_debug()
-                        except Exception as e:
-                            #print(e)
-                            if not self._port.isOpen():
-                                self._port.open()
-                            continue
-                            if retry_count > MAX_RETRY_TIMES:
-                                err = (ERROR_MSG,"Error Count Exceeded, Stop Trying",BASH_TIPS['DEFAULT'])
-                                err = tuple2str(err)
-                                self.raise_exception( Exception(err) )
-                            time.sleep(0.1)
-                            continue
-                        if FlashModeResponse.Operation(op) == FlashModeResponse.Operation.ISP_FLASH_WRITE and FlashModeResponse.ErrorCode(reason) == FlashModeResponse.ErrorCode.ISP_RET_OK:
-                            #KFlash.log(INFO_MSG,"Send write command successfully, writing ...",BASH_TIPS['DEFAULT'])
-                            self._port.flushInput()
-                            self._port.flushOutput()
-                            break
-                        elif FlashModeResponse.Operation(op) == FlashModeResponse.Operation.ISP_FLASH_WRITE and FlashModeResponse.ErrorCode(reason) == FlashModeResponse.ErrorCode.ISP_RET_FLASH_BUSY:
-                            #KFlash.log(INFO_MSG,"Flash is writing ...",BASH_TIPS['DEFAULT'])
-                            self._port.flushInput()
-                            self._port.flushOutput()
-                            retry_count = 0
-                            time.sleep(0.5)
-                            continue
-                        elif FlashModeResponse.Operation(op) == FlashModeResponse.Operation.ISP_FLASH_WRITE and FlashModeResponse.ErrorCode(reason) == FlashModeResponse.ErrorCode.ISP_RET_BAD_DATA_CHECKSUM:
-                            self._port.flushInput()
-                            self._port.flushOutput()
-                            KFlash.log(WARN_MSG,"Data checksum error, retrying...",BASH_TIPS['DEFAULT'])
-                            time.sleep(0.1)
-                        else:
-                            if retry_count > MAX_RETRY_TIMES:
-                                err = (ERROR_MSG,"Failed to write to K210's flash",BASH_TIPS['DEFAULT'])
-                                err = tuple2str(err)
-                                self.raise_exception( Exception(err) )
-                            KFlash.log(WARN_MSG,"Unexcepted Return recevied, retrying...",BASH_TIPS['DEFAULT'])
-                            time.sleep(0.1)
-                            continue
-                        break
-                    # Write success, move to next chunk
+                    # Share the original 90-second response allowance across all retries.
+                    self._flash_request(out, 0xd4, 'Flash write at 0x{:08x}'.format(address), 90, deadline_s=90)
                     address += len(chunk)
 
             def flash_erase(self, erase_addr = 0, erase_len = 0):

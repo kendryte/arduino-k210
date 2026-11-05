@@ -1,24 +1,46 @@
-name: arduino k210 release based on ESP32 Arduino Release
+name: Publish Arduino package
 
 on:
-  release:
-    types: published
+  workflow_call:
+    inputs:
+      source-ref:
+        description: Commit or release tag that passed CI
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Publish Release
-    runs-on: ubuntu-latest
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
-
+    # Stable and dev releases share both indexes. Never cancel an active publisher.
+    concurrency:
+      group: arduino-package-indexes
+      queue: max
+      cancel-in-progress: false
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-    - name: Build Release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: bash ./tools/on-release.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source-ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      # The publisher prunes older dev snapshots only after publication succeeds.
+      - name: Publish package and indexes, retaining only the latest dev snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/on-release.sh
+      - name: Upload release metadata
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: k210-release-metadata
+          path: build/release/*.json
+          if-no-files-found: ignore
+          retention-days: 30
