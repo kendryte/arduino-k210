@@ -59,6 +59,14 @@ html_js_files = [
 default_dark_mode = True
 
 smv_tag_whitelist = r'^\d+\.\d+$'
+# hm 分支和 main 分支内容完全相同(指向同一个commit)，多构建一份是重复
+# 劳动，只保留 main 分支参与多版本文档构建。
+smv_branch_whitelist = r'^main$'
+# PR 触发时 actions/checkout 会以 detached HEAD 签出 refs/pull/NN/merge，
+# 本地不存在名为 main 的分支，只有 refs/remotes/origin/main。
+# sphinx-multiversion 默认不扫描远程分支(smv_remote_whitelist=None)，
+# 必须显式允许 origin 远程，否则会报 "No matching refs found!"。
+smv_remote_whitelist = r'^origin$'
 
 html_theme_options = {
     "repository_url": "https://github.com/kendryte/arduino-k210",
