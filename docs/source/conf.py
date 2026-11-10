@@ -59,6 +59,9 @@ html_js_files = [
 default_dark_mode = True
 
 smv_tag_whitelist = r'^\d+\.\d+$'
+# hm 分支和 main 分支内容完全相同(指向同一个commit)，多构建一份是重复
+# 劳动，只保留 main 分支参与多版本文档构建。
+smv_branch_whitelist = r'^main$'
 
 html_theme_options = {
     "repository_url": "https://github.com/kendryte/arduino-k210",

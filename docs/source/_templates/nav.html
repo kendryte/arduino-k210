@@ -1,61 +1,358 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&display=swap" rel="stylesheet"></noscript>
+
 <div class="document-navbar-nav">
-    <span class="nav-item"><a href="/zh/products">产品中心</a></span>
-    <span class="nav-item md-none sm-show"><a href="/zh/resource">资料下载</a></span>
-    <span class="nav-item active"><a href="/zh/document">文档中心</a></span>
-    <span class="nav-item md-none sm-show"><a href="/zh/model/library">模型库</a></span>
-    <span class="nav-item md-none sm-show"><a href="/zh/training/start">模型训练</a></span>
-    <span class="nav-item"><a href="/zh/blog">博客</a></span>
-    <!-- 添加点击事件 -->
-    <span class="nav-item bbs" onclick="goBbs()">问答社区 <img src="https://www.kendryte.com/img/hot.ebb7d69e.svg"
-            style="transform: translateY(-50%)" alt="" /></span>
+  <span class="nav-item"><a href="/zh/products">产品中心</a></span>
+  <span class="nav-item"><a href="/zh/resource">资料下载</a></span>
+
+  <!-- 文档中心：带 chip 风格的多列下拉 -->
+  <span class="nav-item has-chip-dropdown">
+    <a href="/zh/document">文档中心<i class="caret"></i></a>
+    <div class="chip-dropdown-panel">
+      <div class="chip-section">
+        <div class="chip-title">K230</div>
+        <ul>
+          <li><a href="/zh/sdkResource/230canmv">CanMV K230</a></li>
+          <li><a href="/zh/sdkResource/230rtt">RT-Smart SDK</a></li>
+          <li><a href="/zh/sdkResource/230linux">Linux SDK</a></li>
+          <li><a href="/zh/sdkResource/230linuxRtt">Linux+RT-Smart SDK</a></li>
+        </ul>
+      </div>
+      <div class="chip-section">
+        <div class="chip-title">K230D</div>
+        <ul>
+          <li><a href="/zh/sdkResource/230dCanmv">CanMV K230</a></li>
+          <li><a href="/zh/sdkResource/230dLinux">Linux SDK</a></li>
+        </ul>
+      </div>
+      <div class="chip-section">
+        <div class="chip-title">K510</div>
+        <ul>
+          <li><a href="https://docs.100ask.net/eai/CanaanK510/YOLOV5-ObjectDetectionAlgorithm" target="_blank">DongshanPI-Vision</a></li>
+          <li><a href="https://github.com/kendryte/k510_docs" target="_blank">SDK</a></li>
+        </ul>
+      </div>
+      <div class="chip-section">
+        <div class="chip-title">K210</div>
+        <ul>
+          <li><a href="/zh/sdkResource/210canmv">CanMV</a></li>
+          <li><a href="/zh/sdkResource/210arduino">Arduino</a></li>
+        </ul>
+      </div>
+    </div>
+  </span>
+
+  <!-- 模型与应用：简单下拉 -->
+  <span class="nav-item has-simple-dropdown">
+    <a href="javascript:void(0)">模型与应用<i class="caret"></i></a>
+    <div class="simple-dropdown">
+      <a href="/zh/model">模型下载</a>
+      <a href="/zh/library">应用下载</a>
+    </div>
+  </span>
+
+  <span class="nav-item"><a href="/zh/training/start">模型训练</a></span>
+  <span class="nav-item"><a href="/zh/blog">资讯</a></span>
+
+  <!-- 学习中心：NEW 角标 + 简单下拉 -->
+  <span class="nav-item has-simple-dropdown has-new">
+    <a href="javascript:void(0)">学习中心<i class="caret"></i></a>
+    <span class="new-badge">NEW</span>
+    <div class="simple-dropdown">
+      <a href="/zh/coursecenter">系列课程</a>
+      <a href="/zh/learning">实战手册</a>
+    </div>
+  </span>
+
+  <span class="nav-item bbs" onclick="goBbs()">问答社区<span class="hot-badge">HOT</span>
+  </span>
 </div>
-<!-- 写样式 -->
+
 <style>
+  /* ===================== 全局基础（跟 bbs-frontend 对齐） ===================== */
+  html {
+    font-size: 17px; /* bbs-frontend 的 media.css 用的就是 17px */
+  }
+
+  /* ===================== 基础容器 ===================== */
+  .document-navbar-nav {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    z-index: 50;
+    /* 跟官网 kendryte.com 保持完全一致 */
+    font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    font-weight: 400;
+    letter-spacing: normal; /* 显式声明 normal，让所有子元素统一继承 */
+  }
+
+  .document-navbar-nav .nav-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 17px; /* 跟 bbs-frontend 的 .menu-list 一致 */
+    margin-right: 20px;
+    margin-bottom: 0;
+    cursor: pointer;
+  }
+
+  .document-navbar-nav .nav-item > a {
+    color: #303133; /* Element UI regular text */
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .document-navbar-nav .nav-item > a:hover {
+    color: #66819d; /* hover 用偏蓝灰 */
+  }
+
+  .document-navbar-nav .active > a {
+    color: #002d5c; /* 当前页用深色 */
+    font-weight: 700;
+  }
+
+  /* ===================== 下拉箭头（CSS 三角，比 ▾ 字符清晰） ===================== */
+  .document-navbar-nav .caret {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-left: 4px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor; /* 跟随文字色 */
+    vertical-align: 0.15em;
+    transition: transform 0.2s;
+  }
+
+  .document-navbar-nav .has-chip-dropdown:hover .caret,
+  .document-navbar-nav .has-simple-dropdown:hover .caret {
+    transform: rotate(180deg);
+  }
+
+  /* ===================== 通用下拉面板 ===================== */
+  .document-navbar-nav .chip-dropdown-panel,
+  .document-navbar-nav .simple-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  }
+
+  /* chip 下拉要走满整行，所以定位到 navbar 上 */
+  .document-navbar-nav .has-chip-dropdown {
+    position: static; /* 让子元素相对 .document-navbar-nav 定位 */
+  }
+
+  .document-navbar-nav .chip-dropdown-panel {
+    left: 0;
+    right: 0;
+    display: flex;
+    padding: 20px 28px;
+  }
+
+  .document-navbar-nav .has-chip-dropdown:hover .chip-dropdown-panel {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  /* simple 下拉贴着 trigger 右下角 */
+  .document-navbar-nav .simple-dropdown {
+    left: -16px;
+    min-width: 140px;
+    padding: 8px 0;
+  }
+
+  .document-navbar-nav .has-simple-dropdown:hover .simple-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  /* ===================== chip 区块（4 列） ===================== */
+  .document-navbar-nav .chip-section {
+    flex: 1;
+    padding: 0 14px;
+    min-width: 0;
+  }
+
+  .document-navbar-nav .chip-section h3 {
+    color: #002d5c;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ebeef5;
+  }
+
+  .document-navbar-nav .chip-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .document-navbar-nav .chip-section li {
+    margin: 0;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+
+  .document-navbar-nav .chip-section a {
+    color: #303133;
+    text-decoration: none;
+  }
+
+  .document-navbar-nav .chip-section a:hover {
+    color: #002d5c;
+  }
+
+  .document-navbar-nav .chip-section .chip-title {
+    color: #002d5c; /* chip 标题用深色 */
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ebeef5;
+  }
+
+  /* ===================== simple 下拉里的项 ===================== */
+  .document-navbar-nav .simple-dropdown a {
+    display: block;
+    padding: 8px 18px;
+    color: #303133;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .document-navbar-nav .simple-dropdown a:hover {
+    background: #f5f7fa;
+    color: #002d5c;
+  }
+
+  /* ===================== NEW 角标 ===================== */
+  .document-navbar-nav .has-new {
+    position: relative;
+  }
+
+  .document-navbar-nav .new-badge {
+    position: absolute;
+    top: -2px;
+    right: -10px;
+    background: #ff4d4f;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1.2;
+    pointer-events: none;
+  }
+
+  /* ===================== HOT 角标 ===================== */
+  .document-navbar-nav .bbs {
+    color: #d12d26;
+    padding-right: 32px; /* 给 HOT 角标留位置，避免压到字 */
+  }
+
+  .document-navbar-nav .bbs:hover {
+    color: rgb(231, 100, 100);
+  }
+
+  .document-navbar-nav .hot-badge {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    background: linear-gradient(135deg, #ff7a45 0%, #d12d26 100%);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1.2;
+    pointer-events: none;
+    box-shadow: 0 1px 2px rgba(209, 45, 38, 0.3);
+  }
+
+  /* ===================== 响应式 ===================== */
+  @media screen and (max-width: 1200px) {
+    .document-navbar-nav .md-none {
+      display: none !important;
+    }
+  }
+
+  @media screen and (max-width: 960px) {
+    .document-navbar-nav {
+      flex-direction: column; /* 移动端菜单竖向堆叠 */
+      align-items: flex-start;
+    }
+
     .document-navbar-nav .nav-item {
-        font-size: 1rem;
-        margin-bottom: 1rem;
-        margin-right: 20px;
-        cursor: pointer;
+      display: block !important;
+      width: 100%;
+      margin-right: 0;
+      margin-bottom: 12px;
     }
 
-    .document-navbar-nav .nav-item a {
-        color: #303133;
+    .document-navbar-nav .has-chip-dropdown,
+    .document-navbar-nav .has-simple-dropdown {
+      width: 100%;
     }
 
-    .document-navbar-nav .nav-item a:hover {
-        color: #66819d;
+    .document-user-info {
+      display: none !important;
     }
 
-    .document-navbar-nav .active a {
-        color: #002D5C;
-        font-weight: 700;
+    /* 移动端：下拉变内联、堆成单列，不悬浮 */
+    .document-navbar-nav .chip-dropdown-panel,
+    .document-navbar-nav .simple-dropdown {
+      position: static;
+      box-shadow: none;
+      opacity: 1;
+      visibility: visible;
+      transform: none;
+      margin-top: 8px;
     }
 
-    .document-navbar-nav .bbs {
-        color: #d12d26;
+    .document-navbar-nav .chip-dropdown-panel {
+      display: block; /* 由 flex 4 列改成 block 单列 */
+      padding: 8px 0 0 16px;
     }
 
-    .document-navbar-nav .bbs:hover {
-        color: rgb(231, 100, 100);
+    .document-navbar-nav .chip-section {
+      padding: 0 0 12px 0;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
     }
 
-    @media screen and (max-width: 1200px) {
-        .document-navbar-nav .md-none {
-            display: none !important;
-        }
+    .document-navbar-nav .chip-section:last-child {
+      border-bottom: none;
     }
 
-    @media screen and (max-width: 960px) {
-        .document-navbar-nav .nav-item  {
-            display: block !important;
-        }
-        .document-user-info {
-            display: none !important;
-        }
+    .document-navbar-nav .simple-dropdown {
+      padding-left: 0;
     }
+  }
+
+  @media screen and (max-width: 1450px) {
+    .document-navbar-nav .lg-none {
+      display: none !important;
+    }
+  }
 </style>
+
 <script>
-    function goBbs() {
-        location.href = `/answer/`
-    }
-</script>
+  function goBbs() {
+    location.href = `/answer/`;
+  }
